@@ -19,7 +19,16 @@
                       :flow ["cljsbuild" "once"]}
               :less  {:files "src/less"
                       :output "resource/public/css"
+                      ; Only files not starting with '_'
+                      :filter #"^[^_].*$"
                       :flow ["less" "once"]}
+              :livereload {; This wont work quite this simply...
+                           :files ["resources/public/js"]
+                           ; [] => state
+                           :init 'figwheel.core/start-server
+                           :init-params [{:server-port 3449}]
+                           ; [state files] => nil
+                           :flow 'figwhweel.core/send-changed-files}
               :css   {:files "resources/public/css"
                       :flow ["live-reload"]
                       :at-begin false}
