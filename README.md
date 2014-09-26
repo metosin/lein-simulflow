@@ -16,17 +16,9 @@ For notes about implementation, check [this](./docs/notes.md).
 
 ## Usage
 
-FIXME: Use this for user-level plugins:
-
-Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
-`:user` profile, or if you are on Leiningen 1.x do `lein plugin install
-lein-simulflow 0.1.0-SNAPSHOT`.
-
-FIXME: Use this for project-level plugins:
-
 Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
 project.clj.
 
-FIXME: and add an example usage that actually makes sense:
-
-    $ lein simulflow
+```bash
+$ lein simulflow
+```
