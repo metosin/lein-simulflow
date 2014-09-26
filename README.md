@@ -1,4 +1,4 @@
-# lein-simulflow
+# lein-simulflow [![Travis CI status](https://secure.travis-ci.org/metosin/lein-simulflow.png)](http://travis-ci.org/#!/metosin/lein-simulflow/builds)
 
 ```
 “Daydreaming is the first awakening of what we call simulflow. It is

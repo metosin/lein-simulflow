@@ -20,8 +20,8 @@ There are already some lein plugins which seek to implement the same functionali
 
 Name | Notes
 -----|------
-lein-pdo     | <ul><li>Every task responsible for listening for file changes</li><li>Not possible to define that Cljsbuild can be run only after Cljx is finished</li></ul>
-lein-watch   | <ul><li>Uses watchtower to poll for file changes</li></ul>
+[lein-pdo](https://github.com/Raynes/lein-pdo)         | <ul><li>Every task responsible for listening for file changes</li><li>Not possible to define that Cljsbuild can be run only after Cljx is finished</li></ul>
+[lein-watch](https://github.com/runoshun/lein-watch)   | <ul><li>Uses watchtower to poll for file changes</li></ul>
 
 ## Libraries which might help
 
@@ -33,3 +33,19 @@ Name | Notes
 [ojo](https://github.com/rplevy/ojo)                 | Advanced
 [nio.file](https://github.com/ToBeReplaced/nio.file) |
 [nio2](https://github.com/juergenhoetzel/clj-nio2)   |
+
+## Parallelization
+
+- Start up
+  1. Cljx, less, css
+  1. After cljx is finished: cljs, midje
+- Cljs source is changed
+  1. Cljs
+  2. After result JS is written, livereload
+- Cljx source is changed
+  1. Cljx
+  2. After cljx is finished: cljs, midje
+  3. After cljs has written JS: livereload
+
+- Should maybe take example from Gulp
+- File events received during execution of tasks should be buffered ([gulp-batch](https://github.com/floatdrop/gulp-batch))
