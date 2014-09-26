@@ -8,12 +8,20 @@
   :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]]}}
 
   :simulflow {:cljx  {:files "src/cljx"
-                      :flow [["cljx" "once"] ["cljsbuild" "once"]]}
-              :cljs  {:files "src/cljs"
+                      ; Describe what this task will create, for dependancy resolution
+                      :output ["target/generated/clj" "target/generated/cljs"]
+                      :flow ["cljx" "once"]}
+              :cljs  {; If some source is output of some another task:
+                      ; If that other task is queued, this task can only be ran after the other has finished
+                      ; => This works also on start up
+                      :files ["src/cljs" "target/generated/cljs"]
+                      ; No need for :output if output of task is not used by another task
                       :flow ["cljsbuild" "once"]}
               :less  {:files "src/less"
+                      :output "resource/public/css"
                       :flow ["less" "once"]}
               :css   {:files "resources/public/css"
-                      :flow ["live-reload"]}
+                      :flow ["live-reload"]
+                      :at-begin false}
               :midle {:files ["src/clj" "src/target/clj" "test/clj"]
                       :flow ["midje"]}})
