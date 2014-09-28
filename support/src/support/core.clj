@@ -1,9 +1,10 @@
 (ns support.core
-  (:require [plumbing.core :refer [map-vals for-map fnk ?>>]]
+  (:require [clojure.java.io :refer [file]]
+            [plumbing.core :refer [map-vals for-map fnk ?>>]]
             [plumbing.graph-async :refer [async-compile]]
             [plumbing.fnk.impl :as fnk-impl]
             [schema.macros :as sm]
-            [clojure.core.async :refer [go <! <!! timeout alt! go-loop chan put! close!] :as async]
+            [clojure.core.async :refer [go <! <!! timeout alt! go-loop chan put! close! mult tap] :as async]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
             [support.async :refer [batch-events]]))
 
@@ -81,14 +82,20 @@
     (graph {})))
 
 (defn watch
-  [dirs]
-  (let [<events (chan)]
-    ; FIXME: Returns a watcher which should be closed with close-watcher
-    ; Tap to <events and when nil? close the watcher?
-    (apply watch-dir
-      (fn [v]
-        (put! <events (str (:file v))))
-      dirs)
+  [dirs <ctrl]
+  (let [<events (chan)
+        watcher (apply watch-dir
+                       (fn [v]
+                         (println v)
+                         (put! <events (str (:file v))))
+                       dirs)]
+    (go-loop []
+      (if (<! <ctrl)
+        (recur)
+        (do
+          (println "close watcher & events")
+          (close! <events)
+          (close-watcher watcher))))
     <events))
 
 (defn main-loop
@@ -103,13 +110,31 @@
       (put! <out [:finished (ts)])
       (loop []
         (let [v (<! <events)]
-          (if-not (nil? v)
+          (if v
             (do
              (put! <out [:start (ts) v])
              (<! (execute options <out v))
              (put! <out [:finished (ts)])
              (recur))
             (do
+              (println "close main-loop")
               (put! <out [:exit (ts)])
               (close! <out))))))
     <out))
+
+(defn get-watch-dirs [root options]
+  (reduce (fn [acc [task-k {:keys [files]}]]
+               (reduce (fn [acc dir]
+                         (conj acc (file root dir)))
+                       acc
+                       (-> files wrap-in-container)))
+          nil
+          options))
+
+(defn start
+  [dir options <ctrl]
+  (let [watches (get-watch-dirs dir options)
+        _ (println watches)
+        <events (watch watches <ctrl)
+        #_<events #_(batch-events <fevents 100)]
+    (main-loop options <events)))

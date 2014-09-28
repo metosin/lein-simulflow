@@ -1,8 +1,13 @@
 (ns support.async
-  (:require [clojure.core.async :refer [go <! timeout] :as async]))
+  (:require [clojure.core.async :refer [go <! timeout close!] :as async]))
+
+(defn with-chan
+  [chan]
+  (close! chan)
+  chan)
 
 (defn chan->vec
-  "Realize the whole channel into vector.
+  "Realize the whole channel into a vector.
    Throws a exception if timeout is reached.
 
    Default timeout is 1000 ms."
@@ -32,4 +37,3 @@
                 <chan)
          <out (async/map set [<out])]
      <out)))
-
