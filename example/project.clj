@@ -1,4 +1,4 @@
-(defproject lein-simulflow.sample "0.1.0-SNAPSHOT"
+(defproject simulflow-example "0.1.0-SNAPSHOT"
   :description "Example workflow with lein-simulflow"
   :url "http://github.com/metosin/lein-simulflow"
   :license {:name "The MIT License (MIT)"
