@@ -4,33 +4,30 @@
             [plumbing.graph-async :refer [async-compile]]
             [plumbing.fnk.impl :as fnk-impl]
             [schema.macros :as sm]
-            [clojure.core.async :refer [go <! <!! timeout alt! go-loop chan put! close! mult tap] :as async]
+            [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
             [support.async :refer [batch-events]]))
 
 (defn ts [] (System/currentTimeMillis))
 
-(defn- wrap-in-container [item]
-  (if (coll? item)
-    item
-    [item]))
-
-(defn intersection
-  [input output]
-  (clojure.set/intersection
-    (-> output wrap-in-container set)
-    (-> input wrap-in-container set)))
+(defn wrap-into [col item]
+  (into col (if (coll? item)
+              item
+              [item])))
 
 (defn build-depenencies-map
   [options]
   {:task-task
    (for-map [[k task] options]
-     k (reduce (fn [acc [k v]]
-                 (if-not (empty? (intersection (:files task) (:output v)))
-                   (conj acc k)
-                   acc))
-               #{}
-               (dissoc options k)))
+     k
+     (reduce (fn [acc [k v]]
+               (if-not (empty? (clojure.set/intersection
+                                 (wrap-into #{} (:output v))
+                                 (wrap-into #{} (:files task))))
+                 (conj acc k)
+                 acc))
+             #{}
+             (dissoc options k)))
    :file-task
    (reduce (fn [acc [k v]]
              (reduce (fn [acc v]
@@ -38,21 +35,15 @@
                                       (conj (get acc v) k)
                                       (set [k]))))
                      acc
-                     (-> v :files wrap-in-container)))
+                     (wrap-into [] (:files v))))
            {}
-           options)
-   })
-
-
-(defn get-depending-tasks
-  [deps-map path]
-  (get-in deps-map [:file-task path]))
+           options)})
 
 (defn- to-fnk [<out [name deps output]]
   (let [body `(go
-                #_(put! ~<out [:start-task (ts) ~name])
+                ; (put! ~<out [:start-task (ts) ~name])
                 (<! (async/timeout 50))
-                #_(put! ~<out [:finished-task (ts) ~name])
+                ; (put! ~<out [:finished-task (ts) ~name])
                 ~output)
 
         [bind body] (sm/extract-arrow-schematized-element nil [deps body])]
@@ -71,7 +62,7 @@
                      (if (empty? queue)
                        task-deps
                        (filter queue task-deps))))
-       (-> (:output v) wrap-in-container)])))
+       (wrap-into [] (:output v))])))
 
 (defn execute
   [options <out & [queue]]
@@ -86,7 +77,6 @@
   (let [<events (chan)
         watcher (apply watch-dir
                        (fn [v]
-                         (println v)
                          (put! <events (str (:file v))))
                        dirs)]
     (go-loop []
@@ -94,8 +84,8 @@
         (recur)
         (do
           (println "close watcher & events")
-          (close! <events)
-          (close-watcher watcher))))
+          (close-watcher watcher)
+          (close! <events))))
     <events))
 
 (defn main-loop
@@ -112,10 +102,11 @@
         (let [v (<! <events)]
           (if v
             (do
-             (put! <out [:start (ts) v])
-             (<! (execute options <out v))
-             (put! <out [:finished (ts)])
-             (recur))
+              (println "event" v)
+              (put! <out [:start (ts) v])
+              (<! (execute options <out v))
+              (put! <out [:finished (ts)])
+              (recur))
             (do
               (println "close main-loop")
               (put! <out [:exit (ts)])
@@ -127,14 +118,28 @@
                (reduce (fn [acc dir]
                          (conj acc (file root dir)))
                        acc
-                       (-> files wrap-in-container)))
+                       (wrap-into [] files)))
           nil
           options))
 
 (defn start
   [dir options <ctrl]
-  (let [watches (get-watch-dirs dir options)
-        _ (println watches)
+  (let [deps-map (build-depenencies-map options)
+        watches (get-watch-dirs dir options)
         <events (watch watches <ctrl)
-        #_<events #_(batch-events <fevents 100)]
+        ;; TODO: Refactor path handling / use some lib
+        <events (async/map (fn [absolute-file]
+                             ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
+                             (let [local-file (clojure.string/replace absolute-file (re-pattern (str "^" dir "/")) "")
+                                   r (some (fn [[task-dir tasks]]
+                                             (if (.startsWith local-file task-dir)
+                                               tasks))
+                                           (:file-task deps-map))]
+                               (println absolute-file local-file r)
+                               r))
+                           [<events])
+        <events (batch-events <events 100)
+        <events (async/map (fn [v]
+                             (set (apply concat v)))
+                           [<events])]
     (main-loop options <events)))

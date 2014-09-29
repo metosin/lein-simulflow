@@ -2,8 +2,8 @@
   (:require [midje.sweet :refer :all]
             [clojure.java.io :refer [file]]
             [plumbing.core :refer [fnk]]
-            [clojure.core.async :as async :refer [go <! put! timeout chan alts!! close!]]
-            [support.async :refer [chan->vec batch-events with-chan]]
+            [clojure.core.async :as async :refer [go <! >! <!! >!! timeout chan alts!! close!]]
+            [support.async-test-utils :refer :all]
             [support.core :refer :all]))
 
 (def sample-conf {:cljx  {:files "src/cljx"
@@ -15,13 +15,11 @@
 
 (def deps-map (build-depenencies-map sample-conf))
 
+(facts wrap-in-container
+  (wrap-in-container "foo") => ["foo"]
+  (wrap-in-container ["a" "b"]) => ["a" "b"])
+
 (facts "dependancy resolution"
-  (fact intersection
-    (intersection "target/generated/cljs" "target/generated/cljs") => #{"target/generated/cljs"}
-    (intersection "target/generated/cljs" "src/cljs") => empty?
-
-    (intersection ["src/cljs" "target/generated/cljs"] ["target/generated/clj" "target/generated/cljs"]) => #{"target/generated/cljs"})
-
   (fact build-depenencies-map
     deps-map
     => {:task-task {:cljx #{}
@@ -29,11 +27,6 @@
         :file-task {"src/cljx" #{:cljx}
                     "src/cljs" #{:cljs}
                     "target/generated/cljs" #{:cljs}}}))
-
-(facts "foo"
-  (let [deps-map (build-depenencies-map sample-conf)]
-    (get-depending-tasks deps-map "target/generated/cljs") => #{:cljs}))
-
 
 (facts "queue"
   (fact create-tasks
@@ -45,7 +38,8 @@
     => {:cljs ["cljs" [] ["resources/public/js"]]})
 
   (fact execute-one
-    (chan->vec (with-chan (execute sample-conf (chan)))) => truthy)
+    (let [<out (chan)]
+      (try<!! (with-chan (execute sample-conf <out))) => nil))
 
   (fact queue
     (let [<events (chan)
@@ -53,14 +47,14 @@
       (close! <events)
       (-> (chan->vec main) last first) => :exit))
 
-  (fact queue
+  (fact advanced-queue
     (let [<events (chan)
           main (main-loop sample-conf <events)]
       (go
         (<! (timeout 50))
-        (put! <events #{:cljs :cljx})
+        (>! <events #{:cljs :cljx})
         (<! (timeout 50))
-        (put! <events #{:cljx})
+        (>! <events #{:cljx})
         (<! (timeout 50))
         (close! <events))
       (-> (chan->vec main) last first) => :exit)))
@@ -82,36 +76,7 @@
         (spit f "foo")
         (<! (timeout 100))
         (close! <ctrl))
-      (chan->vec <events) => (repeat 3 (str f))))
-
-  (fact "batches"
-    (let [dir (temp-directory)
-          dir2 (temp-directory)
-          f (file dir "foo.txt")
-          f2 (file dir "bar.txt")
-          <ctrl (chan)
-          <fevents (watch [dir dir2] <ctrl)
-          <events (batch-events <fevents 100)]
-     (go
-        ; Modify 1 & 2 during first batch window
-        (spit f "foo")
-        (spit f2 "foo")
-        (<! (timeout 10))
-        (spit f "foo")
-        (<! (timeout 10))
-        (spit f2 "foo")
-        (<! (timeout 120))
-
-        ; Second batch window
-        (spit f "foo")
-        (<! (timeout 120))
-
-        ; Third
-        (spit f2 "foo")
-        (<! (timeout 120))
-
-        (close! <ctrl))
-      (chan->vec <events) => [#{(str f) (str f2)} #{(str f)} #{(str f2)}])))
+      (chan->vec <events) => (repeat 3 (str f)))))
 
 (defn temp-file [parent dir name]
   (let [dir (file parent dir)]
