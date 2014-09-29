@@ -15,9 +15,11 @@
 
 (def deps-map (build-depenencies-map sample-conf))
 
-(facts wrap-in-container
-  (wrap-in-container "foo") => ["foo"]
-  (wrap-in-container ["a" "b"]) => ["a" "b"])
+(facts wrap-into
+  (wrap-into [] "foo") => ["foo"]
+  (wrap-into [] ["a" "b"]) => ["a" "b"]
+  (wrap-into #{} "a") => #{"a"}
+  (wrap-into #{} ["a" "b"]) => #{"a" "b"})
 
 (facts "dependancy resolution"
   (fact build-depenencies-map

@@ -2,7 +2,8 @@
   (:require [clojure.java.io :refer [file]]
             [plumbing.core :refer [map-vals for-map fnk ?>>]]
             [plumbing.graph-async :refer [async-compile]]
-            [plumbing.fnk.impl :as fnk-impl]
+            [plumbing.fnk.pfnk :as pfnk]
+            [schema.core :as s]
             [schema.macros :as sm]
             [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
@@ -40,14 +41,16 @@
            options)})
 
 (defn- to-fnk [<out [name deps output]]
-  (let [body `(go
-                ; (put! ~<out [:start-task (ts) ~name])
-                (<! (async/timeout 50))
-                ; (put! ~<out [:finished-task (ts) ~name])
-                ~output)
-
-        [bind body] (sm/extract-arrow-schematized-element nil [deps body])]
-    (fnk-impl/fnk-form nil nil bind body)))
+  (let [f (fn [_]
+            (go
+              (put! <out [:start-task (ts) name])
+              (<! (async/timeout 50))
+              (put! <out [:finished-task (ts) name])
+              output))
+        ; Magically generate schema for fnk so that the graph dependancies work
+        s (for-map [dep deps]
+            (keyword dep) s/Any)]
+    (pfnk/fn->fnk f [s s])))
 
 (defn create-tasks
   [options & [queue]]
@@ -67,7 +70,7 @@
 (defn execute
   [options <out & [queue]]
   (let [graph-map (map-vals
-                    (comp eval (partial to-fnk <out))
+                    (partial to-fnk <out)
                     (create-tasks options queue))
         graph (async-compile graph-map)]
     (graph {})))
@@ -130,13 +133,11 @@
         ;; TODO: Refactor path handling / use some lib
         <events (async/map (fn [absolute-file]
                              ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
-                             (let [local-file (clojure.string/replace absolute-file (re-pattern (str "^" dir "/")) "")
-                                   r (some (fn [[task-dir tasks]]
-                                             (if (.startsWith local-file task-dir)
-                                               tasks))
-                                           (:file-task deps-map))]
-                               (println absolute-file local-file r)
-                               r))
+                             (let [local-file (clojure.string/replace absolute-file (re-pattern (str "^" dir "/")) "")]
+                               (some (fn [[task-dir tasks]]
+                                       (if (.startsWith local-file task-dir)
+                                         tasks))
+                                     (:file-task deps-map))))
                            [<events])
         <events (batch-events <events 100)
         <events (async/map (fn [v]
