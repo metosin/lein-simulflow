@@ -33,11 +33,11 @@
 (facts "queue"
   (fact create-tasks
     (create-tasks sample-conf)
-    => {:cljx ["cljx" [] ["target/generated/clj" "target/generated/cljs"]]
-        :cljs ["cljs" ['cljx] ["resources/public/js"]]}
+    => {:cljx ["cljx" [] ["cljx" "once"]]
+        :cljs ["cljs" ['cljx] ["cljsbuild" "once"]]}
 
     (create-tasks sample-conf #{:cljs})
-    => {:cljs ["cljs" [] ["resources/public/js"]]})
+    => {:cljs ["cljs" [] ["cljsbuild" "once"]]})
 
   (fact execute-one
     (let [<out (chan)]
@@ -103,13 +103,21 @@
         [cljs-js cljs-js-src]     (temp-file root "resources/public/js" "foo.js")
 
         cljx-mock
-        (fn []
-          (spit cljx-clj-src "clj")
-          (spit cljx-cljs-src "cljs"))
+        (let [i (atom 0)]
+          (fn []
+            (go
+              (swap! i inc)
+              (<! (timeout 120))
+              (spit cljx-clj-src (str "clj" @i))
+              (<! (timeout 120))
+              (spit cljx-cljs-src (str "cljs" @i)))))
 
         cljs-mock
-        (fn []
-          (spit cljs-js-src "js"))
+        (let [i (atom 0)]
+          (fn []
+            (go
+              (<! (timeout 120))
+              (spit cljs-js-src (str "js" (swap! i inc))))))
 
         e2e-conf
         {:cljx  {:files "src/cljx"
@@ -124,8 +132,10 @@
     (go
       (<! (timeout 100))
       (spit cljs-src "foo")
-      (<! (timeout 120))
+      (<! (timeout 220))
       (spit cljx-src "foo")
-      (<! (timeout 500))
+      (<! (timeout 1500))
       (close! <ctrl))
-    (chan->vec main 2500) => []))
+    (-> (chan->vec main 2500) last first) => :exit
+    (slurp cljs-js-src) => "js3"
+    (slurp cljx-cljs-src) => "cljs2"))

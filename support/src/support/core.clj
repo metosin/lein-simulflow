@@ -1,11 +1,10 @@
 (ns support.core
   (:require [clojure.java.io :refer [file]]
-            [plumbing.core :refer [map-vals for-map fnk ?>>]]
+            [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
+            [schema.core :as s]
+            [plumbing.core :refer [map-vals for-map fnk]]
             [plumbing.graph-async :refer [async-compile]]
             [plumbing.fnk.pfnk :as pfnk]
-            [schema.core :as s]
-            [schema.macros :as sm]
-            [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
             [support.async :refer [batch-events]]))
 
@@ -44,9 +43,11 @@
   (let [f (fn [_]
             (go
               (put! <out [:start-task (ts) name])
-              (<! (async/timeout 50))
-              (put! <out [:finished-task (ts) name])
-              output))
+              (let [r (if (fn? output)
+                        (<! (output))
+                        output)]
+                (put! <out [:finished-task (ts) name])
+                r)))
         ; Magically generate schema for fnk so that the graph dependancies work
         s (for-map [dep deps]
             (keyword dep) s/Any)]
@@ -65,7 +66,7 @@
                      (if (empty? queue)
                        task-deps
                        (filter queue task-deps))))
-       (wrap-into [] (:output v))])))
+       (:flow v)])))
 
 (defn execute
   [options <out & [queue]]
@@ -86,7 +87,6 @@
       (if (<! <ctrl)
         (recur)
         (do
-          (println "close watcher & events")
           (close-watcher watcher)
           (close! <events))))
     <events))
@@ -105,13 +105,11 @@
         (let [v (<! <events)]
           (if v
             (do
-              (println "event" v)
               (put! <out [:start (ts) v])
               (<! (execute options <out v))
               (put! <out [:finished (ts)])
               (recur))
             (do
-              (println "close main-loop")
               (put! <out [:exit (ts)])
               (close! <out))))))
     <out))
