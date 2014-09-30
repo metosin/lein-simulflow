@@ -1,4 +1,4 @@
-(ns support.async-test-utils
+(ns simulflow.async-test-utils
   (:require [clojure.core.async :refer [go <! timeout close!] :as async]))
 
 (defn with-chan

@@ -37,4 +37,12 @@ plugins check [this](./docs/notes.md).
 
 ## TODO
 
-- Test how well the `java.nio.file.WatchService` works for OS X
+- [ ] Test how well the `java.nio.file.WatchService` works for OS X
+- [ ] Instead of batching file events (which doesn't work here) try alternative approach:
+  - For each main loop iteration: take all values from channel until timeout
+- [ ] Everything is slow. Cljs is not using incremental compiling etc. Plugin auto tasks have some state... Do something...
+
+## NOTES
+
+- Is the dependancy stuff useful for anything but the start up?
+  - [ ] Conjure up some sequence diagrams...

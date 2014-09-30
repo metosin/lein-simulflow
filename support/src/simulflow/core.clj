@@ -1,4 +1,4 @@
-(ns support.core
+(ns simulflow.core
   (:require [clojure.java.io :refer [file]]
             [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
             [schema.core :as s]
@@ -6,7 +6,7 @@
             [plumbing.graph-async :refer [async-compile]]
             [plumbing.fnk.pfnk :as pfnk]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
-            [support.async :refer [batch-events]]))
+            [simulflow.async :refer [batch-events]]))
 
 (defn ts [] (System/currentTimeMillis))
 
@@ -44,7 +44,10 @@
             (go
               (put! <out [:start-task (ts) name])
               (let [r (if (fn? output)
-                        (<! (output))
+                        (try
+                          (<! (output))
+                          (catch Exception e
+                            (put! <out [:exception (ts) (.getMessage e)])))
                         output)]
                 (put! <out [:finished-task (ts) name])
                 r)))

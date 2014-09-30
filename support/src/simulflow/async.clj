@@ -1,4 +1,4 @@
-(ns support.async
+(ns simulflow.async
   (:require [clojure.core.async :refer [go <! timeout close!] :as async]))
 
 (defn batch-events

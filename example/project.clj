@@ -5,7 +5,33 @@
             :url "http://opensource.org/licenses/mit-license.php"
             :distribution :repo}
 
-  :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]]}}
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 [org.clojure/clojurescript "0.0-2322"]]
+
+  :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]
+                             [lein-cljsbuild "1.0.3"]
+                             [com.keminglabs/cljx "0.4.0"]
+                             [lein-less "1.7.2"]]}}
+
+  :source-paths ["src/clj" "target/generated/clj"]
+  :test-paths ["test/clj"]
+  :pedantic? false ;; Silence warnings about cljx range deps
+
+  :less {:source-paths ["src/less"]
+         :target-path "resources/public/css"}
+
+  :cljsbuild {:builds {:dev {:source-paths ["target/generated/cljs" "src/cljs"]
+                             :compiler {:output-to "resources/public/js/foo.js"
+                                        :output-dir "resources/public/js/out"
+                                        :optimizations :none
+                                        :source-map true}}}}
+
+  :cljx {:builds [{:rules :clj
+                   :source-paths ["src/cljx"]
+                   :output-path "target/generated/clj"}
+                  {:rules :cljs
+                   :source-paths ["src/cljx"]
+                   :output-path "target/generated/cljs"}]}
 
   :simulflow {:cljx  {:files "src/cljx"
                       ; Describe what this task will create, for dependancy resolution
@@ -20,16 +46,4 @@
                       :flow ["cljsbuild" "once"]}
               :less  {:files "src/less"
                       :output "resource/public/css"
-                      ; Only files not starting with '_'
-                      :filter #"^[^_].*$"
-                      :flow ["less" "once"]}
-              :livereload {; This wont work quite this simply...
-                           :files ["resources/public/js" "resources/public/css"]
-                           ; [opts] => state
-                           :init figwheel.core/start-server
-                           :init-params [{:server-port 3449}]
-                           ; [state files] => nil
-                           :flow figwhweel.core/send-changed-files
-                           :at-begin false}
-              :midje {:files ["src/clj" "src/target/clj" "test/clj"]
-                      :flow ["midje"]}})
+                      :flow ["less" "once"]}})

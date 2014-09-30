@@ -1,10 +1,10 @@
-(ns support.core-test
+(ns simulflow.core-test
   (:require [midje.sweet :refer :all]
             [clojure.java.io :refer [file]]
             [plumbing.core :refer [fnk]]
             [clojure.core.async :as async :refer [go <! >! <!! >!! timeout chan alts!! close!]]
-            [support.async-test-utils :refer :all]
-            [support.core :refer :all]))
+            [simulflow.async-test-utils :refer :all]
+            [simulflow.core :refer :all]))
 
 (def sample-conf {:cljx  {:files "src/cljx"
                           :output ["target/generated/clj" "target/generated/cljs"]
