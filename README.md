@@ -38,7 +38,7 @@ provided `java.nio.file` API which delegates to OS provided APIs
 for changes every 100 ms or so.
 
 For notes about implementation and how this relates to other, similar,
-plugins check [this](./docs/notes.md).
+plugins check [this](./doc/notes.md).
 
 ## TODO
 
