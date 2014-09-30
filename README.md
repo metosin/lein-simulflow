@@ -12,6 +12,8 @@ better thinking.”
 
 ## Usage
 
+Check [example project.clj](./example/project.clj).
+
 Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
 project.clj.
 
@@ -49,3 +51,5 @@ plugins check [this](./docs/notes.md).
 
 - Is the dependancy stuff useful for anything but the start up?
   - [ ] Conjure up some sequence diagrams...
+- Is it a good idea to define output dirs for the tasks
+  - Would it be simpler to just define from which other tasks the task depends?
