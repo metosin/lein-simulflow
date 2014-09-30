@@ -1,0 +1,5 @@
+language: clojure
+lein: lein2
+before_install:
+    cd support
+script: lein midje

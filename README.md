@@ -1,5 +1,8 @@
 # lein-simulflow [![Travis CI status](https://secure.travis-ci.org/metosin/lein-simulflow.png)](http://travis-ci.org/#!/metosin/lein-simulflow/builds)
 
+Combine several lein auto tasks for leaner workflow.
+*NOTE: Very early version, not usable*
+
 ```
 “Daydreaming is the first awakening of what we call simulflow. It is
 an essential tool of rational thought. With it you can clear the mind for
