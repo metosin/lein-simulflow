@@ -1,12 +1,12 @@
 (ns simulflow.core
   (:require [clojure.java.io :refer [file]]
-            [clojure.core.async :refer [go <! <! >! put! timeout alt! go-loop chan close!] :as async]
+            [clojure.core.async :refer [go <! put! timeout go-loop chan close!] :as async]
             [schema.core :as s]
             [plumbing.core :refer [map-vals for-map fnk]]
             [plumbing.graph-async :refer [async-compile]]
             [plumbing.fnk.pfnk :as pfnk]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
-            [simulflow.async :refer [batch-events]]))
+            [simulflow.async :refer [read-events]]))
 
 (defn ts [] (System/currentTimeMillis))
 
@@ -39,32 +39,31 @@
            {}
            options)})
 
-(defn- to-fnk [<out [name deps output]]
+(defn- to-fnk [<out [task-k [deps output]]]
   (let [f (fn [_]
             (go
-              (put! <out [:start-task (ts) name])
+              (put! <out [:start-task (ts) task-k])
               (let [r (if (fn? output)
                         (try
                           (<! (output))
                           (catch Exception e
                             (put! <out [:exception (ts) (.getMessage e)])))
                         output)]
-                (put! <out [:finished-task (ts) name])
+                (put! <out [:finished-task (ts) task-k])
                 r)))
         ; Magically generate schema for fnk so that the graph dependancies work
         s (for-map [dep deps]
             (keyword dep) s/Any)]
-    (pfnk/fn->fnk f [s s])))
+    [task-k (pfnk/fn->fnk f [s s])]))
 
 (defn create-tasks
-  [options & [queue]]
+  [options queue]
   (let [{:keys [task-task]} (build-depenencies-map options)]
     (for-map [[k v] options
               :let [task-deps (get task-task k)]
               :when (or (empty? queue) (contains? queue k))]
       k
-      [(name k)
-       ; Add dependancy (fnk param) to other queued tasks
+      [; Add dependancy (fnk param) to other queued tasks
        (into [] (map (comp symbol name)
                      (if (empty? queue)
                        task-deps
@@ -72,10 +71,10 @@
        (:flow v)])))
 
 (defn execute
-  [options <out & [queue]]
-  (let [graph-map (map-vals
-                    (partial to-fnk <out)
-                    (create-tasks options queue))
+  [options <out queue]
+  (let [graph-map (into {} (map
+                             (partial to-fnk <out)
+                             (create-tasks options queue)))
         graph (async-compile graph-map)]
     (graph {})))
 
@@ -84,7 +83,7 @@
   (let [<events (chan)
         watcher (apply watch-dir
                        (fn [v]
-                         (put! <events (str (:file v))))
+                         (put! <events (:file v)))
                        dirs)]
     (go-loop []
       (if (<! <ctrl)
@@ -94,54 +93,70 @@
           (close! <events))))
     <events))
 
+; TODO: Refactor
+(defn file->relpath
+  [dir absolute-file]
+  (clojure.string/replace (str absolute-file) (re-pattern (str "^" dir "/")) ""))
+
+(defn relpath->task
+  [file-task-map relpath]
+  ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
+  (some (fn [[task-dir tasks]]
+          (if (.startsWith relpath task-dir)
+            tasks))
+        file-task-map))
+
+(defn events->tasks
+  "Takes set of files and maps those to set of tasks
+   Events is nil, it means that the event channel was closed
+   and we should return nil also."
+  [dir deps-map events]
+  (some->>
+    events
+    (map (comp
+           (partial relpath->task (:file-task deps-map))
+           (partial file->relpath dir)))
+    (apply concat)
+    set))
+
 (defn main-loop
   "Creates a loop which will read <events as long as the channel is open.
    Executes tasks from events.
    Returns a loop which contains the output."
-  [options <events]
+  [events->tasks options <events]
   (let [<out (chan)]
-    (go
-      (put! <out [:init (ts)])
-      (<! (execute options <out))
-      (put! <out [:finished (ts)])
-      (loop []
-        (let [v (<! <events)]
-          (if v
-            (do
-              (put! <out [:start (ts) v])
-              (<! (execute options <out v))
-              (put! <out [:finished (ts)])
-              (recur))
-            (do
-              (put! <out [:exit (ts)])
-              (close! <out))))))
+    (go-loop [events #{}]
+      (println events)
+      (if events
+        (do
+          (put! <out [:start (ts) events])
+          (<! (execute options <out events))
+          (put! <out [:finished (ts)])
+          (let [events  (<! (read-events <events))
+                _ (println events)
+                events (events->tasks events)]
+            (recur events)))
+        (do
+          (println "Exit main-loop")
+          (put! <out [:exit (ts)])
+          (close! <out))))
     <out))
 
 (defn get-watch-dirs [root options]
-  (reduce (fn [acc [task-k {:keys [files]}]]
-               (reduce (fn [acc dir]
-                         (conj acc (file root dir)))
-                       acc
-                       (wrap-into [] files)))
-          nil
-          options))
+  (apply concat (map (comp
+                       (partial wrap-into [])
+                       :files
+                       val)
+                     options)))
 
 (defn start
   [dir options <ctrl]
   (let [deps-map (build-depenencies-map options)
-        watches (get-watch-dirs dir options)
-        <events (watch watches <ctrl)
-        ;; TODO: Refactor path handling / use some lib
-        <events (async/map (fn [absolute-file]
-                             ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
-                             (let [local-file (clojure.string/replace absolute-file (re-pattern (str "^" dir "/")) "")]
-                               (some (fn [[task-dir tasks]]
-                                       (if (.startsWith local-file task-dir)
-                                         tasks))
-                                     (:file-task deps-map))))
-                           [<events])
-        <events (batch-events <events 100)
-        <events (async/map (fn [v]
-                             (set (apply concat v)))
-                           [<events])]
-    (main-loop options <events)))
+        watches (map
+                  (partial file dir)
+                  (get-watch-dirs dir options))
+        <events (watch watches <ctrl)]
+    (main-loop
+      (partial events->tasks dir deps-map)
+      options
+      <events)))

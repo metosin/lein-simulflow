@@ -1,18 +1,19 @@
 (ns simulflow.async
-  (:require [clojure.core.async :refer [go <! timeout close!] :as async]))
+  (:require [clojure.core.async :refer [timeout alt! go-loop]]))
 
-(defn batch-events
-  "Batch together events during the timeout-msecs."
-  ([<chan] (batch-events <chan 250))
-  ([<chan timeout-msecs]
-   ; FIXME: Use chan + xform when transducers are available
-   (let [prev (atom nil)
-         <out (async/partition-by
-                (fn [v]
-                  (let [now (System/currentTimeMillis)
-                        diff (- now (or @prev 0))]
-                    (when (> diff timeout-msecs)
-                      (reset! prev now))
-                    @prev))
-                <chan)]
-     <out)))
+(defn read-events
+  "Take all vals available from a port.
+   If there is no vals available for timeout-msecs,
+   return the read vals as a set."
+  ([<events] (read-events <events 100))
+  ([<events timeout-msecs]
+   (let [<timeout (timeout timeout-msecs)]
+     (go-loop [buffer #{}]
+       (alt!
+         <events ([v] (if v
+                        (recur (conj buffer v))
+                        ; When channel is closed, if buffer has some items,
+                        ; return it, else nil (to close main-loop)
+                        (if-not (empty? buffer)
+                          buffer)))
+         <timeout ([] buffer))))))

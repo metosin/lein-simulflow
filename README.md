@@ -43,8 +43,11 @@ plugins check [this](./doc/notes.md).
 ## TODO
 
 - [ ] Test how well the `java.nio.file.WatchService` works for OS X
-- [ ] Instead of batching file events (which doesn't work here) try alternative approach:
+- [x] Instead of batching file events (which doesn't work here) try alternative approach:
   - For each main loop iteration: take all values from channel until timeout
+- [ ] Handle depenencies differently.
+  - Start: cljs + cljx queued, cljx writes .cljs which queues cljs again...
+  event though cljs is already queued -> cljs runs too many times.
 - [ ] Everything is slow. Cljs is not using incremental compiling etc. Plugin auto tasks have some state... Do something...
 
 ## NOTES
