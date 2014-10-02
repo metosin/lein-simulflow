@@ -23,6 +23,8 @@ $ lein simulflow
 
 ## Overview
 
+![Screenshot](./screenshot.png)
+
 While doing modern project with both Clojure and ClojureScript your workflow
 might require running several lein tasks parallal, e.g. cljx, midje, cljsbuild.
 Simulflow will run your tasks in one lein-process. The tasks will run parallel

@@ -2,33 +2,17 @@
   (:require [clojure.core.async :as async :refer [go <! <!! put! >!! timeout chan alts!! close!]]
             [clojure.java.io :refer [file]]
             [midje.sweet :refer :all]
+            [org.tobereplaced.nio.file :as nio]
             [plumbing.core :refer [fnk]]
             [simulflow.async-test-utils :refer :all]
+            [simulflow.config :refer :all]
             [simulflow.core :refer :all]))
 
-(def sample-conf {:cljx  {:files "src/cljx"
-                          :output ["target/generated/clj" "target/generated/cljs"]
-                          :flow ["cljx" "once"]}
-                  :cljs  {:files ["src/cljs" "target/generated/cljs"]
-                          :output "resources/public/js"
-                          :flow ["cljsbuild" "once"]}})
-
-(def deps-map (build-depenencies-map sample-conf))
-
-(facts wrap-into
-  (wrap-into [] "foo") => ["foo"]
-  (wrap-into [] ["a" "b"]) => ["a" "b"]
-  (wrap-into #{} "a") => #{"a"}
-  (wrap-into #{} ["a" "b"]) => #{"a" "b"})
-
-(facts "dependancy resolution"
-  (fact build-depenencies-map
-    deps-map
-    => {:task-task {:cljx #{}
-                    :cljs #{:cljx}}
-        :file-task {"src/cljx" #{:cljx}
-                    "src/cljs" #{:cljs}
-                    "target/generated/cljs" #{:cljs}}}))
+(def sample-conf {:flows {:cljx  {:watch "src/cljx"
+                                  :flow ["cljx" "once"]}
+                          :cljs  {:watch ["src/cljs" "target/generated/cljs"]
+                                  :deps [:cljx]
+                                  :flow ["cljsbuild" "once"]}}})
 
 (facts "queue"
   (fact create-tasks
@@ -72,32 +56,32 @@
     (.mkdirs dir)
     [dir (file dir name)]))
 
-(let [{:keys [file-task]} (build-depenencies-map {:test {:files ["foo/bar"]}})
-      dir (temp-directory)
-      [sub-dir f] (temp-file dir "foo/bar" "foo.txt")]
+(let [dir (temp-directory)
+      options (coerce-config! (str dir) sample-conf)
+      [sub-dir f] (temp-file dir "target/generated/cljs" "foo.cljs")
+      path (nio/path f)]
 
   (facts path->task
-    (path->task file-task f) => #{:test})
+    (path->tasks options path) => #{:cljs})
 
-  (facts "watch dir"
-    (fact "simple"
-      (let [<ctrl (chan)
-            <events (watch [dir] <ctrl)]
-        (go
-          (spit f "foo")
-          (<! (timeout 50))
-          (spit f "foo")
-          (<! (timeout 100))
-          (close! <ctrl))
-        (chan->vec <events) => (repeat 3 f)))))
-
-(facts get-watch-dirs
-  (let [root (temp-directory)]
-    (map str (get-watch-dirs root sample-conf))
+  (facts get-watch-dirs
+    (map (comp str (partial nio/relativize dir))
+         (get-watch-dirs (:flows options)))
     => (contains ["target/generated/cljs"
                   "src/cljs"
                   "src/cljx"]
-                 :in-any-order)))
+                 :in-any-order))
+
+  (facts "watch dir"
+    (let [<ctrl (chan)
+          <events (watch [dir] <ctrl)]
+      (go
+        (spit f "foo")
+        (<! (timeout 50))
+        (spit f "foo")
+        (<! (timeout 100))
+        (close! <ctrl))
+      (chan->vec <events) => (repeat 3 path))))
 
 (facts "e2e"
   (let [root (temp-directory)
@@ -126,15 +110,16 @@
               (spit cljs-js-src (str "js" (swap! i inc))))))
 
         e2e-conf
-        {:cljx  {:files "src/cljx"
-                 :output ["target/generated/clj" "target/generated/cljs"]
-                 :flow cljx-mock}
-         :cljs  {:files ["src/cljs" "target/generated/cljs"]
-                 :output "resources/public/js"
-                 :flow cljs-mock}}
+        {:flows {:cljx  {:watch "src/cljx"
+                         :flow cljx-mock}
+                 :cljs  {:watch ["src/cljs" "target/generated/cljs"]
+                         :deps [:cljx]
+                         :flow cljs-mock}}}
 
         <ctrl (chan)
-        main (start root e2e-conf <ctrl)]
+        main (start {:root (str root)
+                     :simulflow e2e-conf}
+                    <ctrl)]
     (go
       (<! (timeout 100))
       (spit cljs-src "foo")
@@ -142,6 +127,6 @@
       (spit cljx-src "foo")
       (<! (timeout 1500))
       (close! <ctrl))
-    (chan->vec main 2500) => :exit
+    (chan->vec main 2500) => truthy
     (slurp cljs-js-src) => "js3"
     (slurp cljx-cljs-src) => "cljs2"))

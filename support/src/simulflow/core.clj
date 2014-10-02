@@ -8,51 +8,21 @@
             [plumbing.fnk.pfnk :as pfnk]
             [plumbing.graph-async :refer [async-compile]]
             [schema.core :as s]
-            [simulflow.async :refer [read-events]]))
+            [simulflow.async :refer [read-events]]
+            [simulflow.config :refer [coerce-config!]]))
 
 (defn ts [] (System/currentTimeMillis))
-
-(defn wrap-into [col item]
-  (into col (if (coll? item)
-              item
-              [item])))
-
-(defn build-depenencies-map
-  [options]
-  {:task-task
-   (for-map [[k task] options]
-     k
-     (reduce (fn [acc [k v]]
-               (if-not (empty? (clojure.set/intersection
-                                 (wrap-into #{} (:output v))
-                                 (wrap-into #{} (:files task))))
-                 (conj acc k)
-                 acc))
-             #{}
-             (dissoc options k)))
-   :file-task
-   (reduce (fn [acc [k v]]
-             (reduce (fn [acc v]
-                       (assoc acc v (if (get acc v)
-                                      (conj (get acc v) k)
-                                      (set [k]))))
-                     acc
-                     (wrap-into [] (:files v))))
-           {}
-           options)})
 
 (defn- to-fnk [<out [task-k [deps output]]]
   (let [f (fn [_]
             (go
-              (put! <out [:start-task (ts) task-k])
-              (let [r (if (fn? output)
-                        (try
-                          (<! (output))
-                          (catch Exception e
-                            (put! <out [:exception (ts) (.getMessage e)])))
-                        output)]
-                (put! <out [:finished-task (ts) task-k])
-                r)))
+              (put! <out [:started-task task-k])
+              (let [start (ts)]
+                (try
+                  (<! (output))
+                  (put! <out [:finished-task task-k (- (ts) start)])
+                  (catch Exception e
+                    (put! <out [:exception (.getMessage e) (- (ts) start)]))))))
         ; Magically generate schema for fnk so that the graph dependancies work
         s (for-map [dep deps]
             (keyword dep) s/Any)]
@@ -60,17 +30,14 @@
 
 (defn create-tasks
   [options queue]
-  (let [{:keys [task-task]} (build-depenencies-map options)]
-    (for-map [[k v] options
-              :let [task-deps (get task-task k)]
-              :when (or (empty? queue) (contains? queue k))]
-      k
-      [; Add dependancy (fnk param) to other queued tasks
-       (into [] (map (comp symbol name)
-                     (if (empty? queue)
-                       task-deps
-                       (filter queue task-deps))))
-       (:flow v)])))
+  (for-map [[k {:keys [flow deps]}] (:flows options)
+            :when (or (empty? queue) (contains? queue k))]
+    k
+    [(into [] (map (comp symbol name)
+                   (if (empty? queue)
+                     deps
+                     (filter queue deps))))
+     flow]))
 
 (defn execute
   [options <out queue]
@@ -83,15 +50,15 @@
 (defn skip-event? [event]
   (or
     ; Backup files
-    (re-matches #".*~$" (:file event))))
+    (re-matches #".*~$" (str (:file event)))))
 
 (defn watch
   [dirs <ctrl]
   (let [<events (chan)
         watcher (apply watch-dir
                        (fn [v]
-                         (if-not (skip-event? v)
-                           (put! <events (:file v))))
+                         (when-not (skip-event? v)
+                           (put! <events (nio/path (:file v)))))
                        dirs)]
     (go-loop []
       (if (<! <ctrl)
@@ -101,22 +68,24 @@
           (close! <events))))
     <events))
 
-(defn path->task
-  [file-task-map file-path]
-  ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
-  (some (fn [[task-dir tasks]]
-          (if (nio/starts-with? (nio/path file-path) task-dir)
-            tasks))
-        file-task-map))
+(defn path->tasks
+  [options file-path]
+  (reduce (fn [acc [task-k flow]]
+            (reduce (fn [acc task-path]
+                      (if (nio/starts-with? file-path task-path)
+                        (conj acc task-k)
+                        acc))
+                    acc
+                    (:watch flow)))
+          #{}
+          (:flows options)))
 
 (defn events->tasks
-  "Takes set of files and maps those to set of tasks
-   Events is nil, it means that the event channel was closed
-   and we should return nil also."
-  [dir deps-map events]
+  "Takes set of files and maps those to set of tasks"
+  [flows events]
   (some->>
     events
-    (map (partial path->task (:file-task deps-map)))
+    (map (partial path->tasks flows))
     (apply concat)
     set))
 
@@ -125,39 +94,37 @@
    Executes tasks from events.
    Returns a loop which contains the output."
   [events->tasks options <events]
-  (let [<out (chan)]
+  (let [<out (chan)
+        <events (async/map (fn [v]
+                             (put! <out [:file-changed v])
+                             v)
+                           [<events])]
     (go-loop [events #{}]
-      (println events)
       (if events
         (do
-          (put! <out [:start (ts) events])
           (<! (execute options <out events))
-          (put! <out [:finished (ts)])
-          (let [events  (<! (read-events <events))
-                _ (println events)
+          (let [events (<! (read-events <events))
                 events (events->tasks events)]
             (recur events)))
         (do
-          (println "Exit main-loop")
           (put! <out [:exit (ts)])
           (close! <out))))
     <out))
 
-(defn get-watch-dirs [root options]
+(defn get-watch-dirs [options]
   (apply concat (map (comp
-                       (partial wrap-into [])
-                       :files
+                       :watch
                        val)
                      options)))
 
 (defn start
-  [dir options <ctrl]
-  (let [deps-map (build-depenencies-map options)
-        watches (map
-                  (partial file dir)
-                  (get-watch-dirs dir options))
-        <events (watch watches <ctrl)]
+  [project <ctrl]
+  (let [root (:root project)
+        options (coerce-config! root (:simulflow project))
+
+        watches (get-watch-dirs (:flows options))
+        <events (watch (map (comp file str) watches) <ctrl)]
     (main-loop
-      (partial events->tasks dir deps-map)
+      (partial events->tasks options)
       options
       <events)))
