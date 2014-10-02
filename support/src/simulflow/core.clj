@@ -1,6 +1,7 @@
 (ns simulflow.core
   (:require [clojure.core.async :refer [go <! put! timeout go-loop chan close!] :as async]
             [clojure.java.io :refer [file]]
+            [clojure.string :as string]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
             [plumbing.core :refer [map-vals for-map fnk]]
             [plumbing.fnk.pfnk :as pfnk]
@@ -78,12 +79,18 @@
         graph (async-compile graph-map)]
     (graph {})))
 
+(defn skip-event? [event]
+  (or
+    ; Backup files
+    (re-matches #".*~$" (:file v))))
+
 (defn watch
   [dirs <ctrl]
   (let [<events (chan)
         watcher (apply watch-dir
                        (fn [v]
-                         (put! <events (:file v)))
+                         (if-not (skip-event? v)
+                           (put! <events (:file v))))
                        dirs)]
     (go-loop []
       (if (<! <ctrl)

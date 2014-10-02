@@ -16,5 +16,3 @@
       (close! <events))
     (try<!! (read-events <events) 250) => #{"a" "b" "c"}
     (try<!! (read-events <events) 250) => #{"d"}))
-
-

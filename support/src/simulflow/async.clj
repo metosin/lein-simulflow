@@ -16,4 +16,7 @@
                         ; return it, else nil (to close main-loop)
                         (if-not (empty? buffer)
                           buffer)))
-         <timeout ([] buffer))))))
+         ; If the buffer is empty after timeout lets wait more
+         <timeout ([] (if (empty? buffer)
+                        (recur buffer)
+                        buffer)))))))
