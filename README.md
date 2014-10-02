@@ -58,3 +58,13 @@ plugins check [this](./doc/notes.md).
   - [ ] Conjure up some sequence diagrams...
 - Is it a good idea to define output dirs for the tasks
   - Would it be simpler to just define from which other tasks the task depends?
+- Might be this feature should be built into Leinigen and plugins would
+implement some API.
+
+## Contact
+
+Ping `Deraen` on Freenode irc.
+
+I would like to hear if you have thoughts about how to solve the problem
+of many long running lein tasks, about this implementation or if you
+think that that the problem is non-existent.
