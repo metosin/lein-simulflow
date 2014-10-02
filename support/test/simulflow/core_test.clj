@@ -76,11 +76,8 @@
       dir (temp-directory)
       [sub-dir f] (temp-file dir "foo/bar" "foo.txt")]
 
-  (facts file->relpath
-    (file->relpath dir f) => "foo/bar/foo.txt")
-
-  (facts relpath->task
-    (relpath->task file-task "foo/bar/foo.txt") => #{:test})
+  (facts path->task
+    (path->task file-task f) => #{:test})
 
   (facts "watch dir"
     (fact "simple"

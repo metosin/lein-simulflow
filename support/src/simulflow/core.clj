@@ -3,6 +3,7 @@
             [clojure.java.io :refer [file]]
             [clojure.string :as string]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
+            [org.tobereplaced.nio.file :as nio]
             [plumbing.core :refer [map-vals for-map fnk]]
             [plumbing.fnk.pfnk :as pfnk]
             [plumbing.graph-async :refer [async-compile]]
@@ -82,7 +83,7 @@
 (defn skip-event? [event]
   (or
     ; Backup files
-    (re-matches #".*~$" (:file v))))
+    (re-matches #".*~$" (:file event))))
 
 (defn watch
   [dirs <ctrl]
@@ -100,16 +101,11 @@
           (close! <events))))
     <events))
 
-; TODO: Refactor
-(defn file->relpath
-  [dir absolute-file]
-  (clojure.string/replace (str absolute-file) (re-pattern (str "^" dir "/")) ""))
-
-(defn relpath->task
-  [file-task-map relpath]
+(defn path->task
+  [file-task-map file-path]
   ; Breakes if file is not found (=> can put! nil), but that shouldn't happen
   (some (fn [[task-dir tasks]]
-          (if (.startsWith relpath task-dir)
+          (if (nio/starts-with? (nio/path file-path) task-dir)
             tasks))
         file-task-map))
 
@@ -120,9 +116,7 @@
   [dir deps-map events]
   (some->>
     events
-    (map (comp
-           (partial relpath->task (:file-task deps-map))
-           (partial file->relpath dir)))
+    (map (partial path->task (:file-task deps-map)))
     (apply concat)
     set))
 
