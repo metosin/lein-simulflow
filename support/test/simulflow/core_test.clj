@@ -1,8 +1,8 @@
 (ns simulflow.core-test
-  (:require [midje.sweet :refer :all]
+  (:require [clojure.core.async :as async :refer [go <! <!! put! >!! timeout chan alts!! close!]]
             [clojure.java.io :refer [file]]
+            [midje.sweet :refer :all]
             [plumbing.core :refer [fnk]]
-            [clojure.core.async :as async :refer [go <! <!! put! >!! timeout chan alts!! close!]]
             [simulflow.async-test-utils :refer :all]
             [simulflow.core :refer :all]))
 

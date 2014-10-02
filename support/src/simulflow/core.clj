@@ -1,11 +1,11 @@
 (ns simulflow.core
-  (:require [clojure.java.io :refer [file]]
-            [clojure.core.async :refer [go <! put! timeout go-loop chan close!] :as async]
-            [schema.core :as s]
-            [plumbing.core :refer [map-vals for-map fnk]]
-            [plumbing.graph-async :refer [async-compile]]
-            [plumbing.fnk.pfnk :as pfnk]
+  (:require [clojure.core.async :refer [go <! put! timeout go-loop chan close!] :as async]
+            [clojure.java.io :refer [file]]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
+            [plumbing.core :refer [map-vals for-map fnk]]
+            [plumbing.fnk.pfnk :as pfnk]
+            [plumbing.graph-async :refer [async-compile]]
+            [schema.core :as s]
             [simulflow.async :refer [read-events]]))
 
 (defn ts [] (System/currentTimeMillis))

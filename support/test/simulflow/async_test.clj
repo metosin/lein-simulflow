@@ -1,8 +1,8 @@
 (ns simulflow.async-test
-  (:require [midje.sweet :refer :all]
-            [clojure.core.async :as async :refer [go <! put! >!! timeout chan close!]]
-            [simulflow.async-test-utils :refer [try<!!]]
-            [simulflow.async :refer :all]))
+  (:require [clojure.core.async :as async :refer [go <! put! >!! timeout chan close!]]
+            [midje.sweet :refer :all]
+            [simulflow.async :refer :all]
+            [simulflow.async-test-utils :refer [try<!!]]))
 
 (facts "read-events"
   (let [<events (chan)]
