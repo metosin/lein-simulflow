@@ -59,7 +59,7 @@ plugins check [this](./doc/notes.md).
 - Is it a good idea to define output dirs for the tasks
   - Would it be simpler to just define from which other tasks the task depends?
 - Might be this feature should be built into Leinigen and plugins would
-implement some API.
+implement some API to provide long running tasks.
 
 ## Contact
 

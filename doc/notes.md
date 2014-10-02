@@ -6,6 +6,7 @@
 - Describe how tasks depend on each other so they can be (optionally?) run parallel
 - The plugin should take care of listening for file changes
   - Should use OS provided file notify service through Java NIO API instead of polling for changes
+  - Currently every lein plugin implements the file change watching themselves...
 - Following tasks should work:
   - [Cljx](https://github.com/lynaghk/cljx/)
   - [Midje](https://github.com/marick/lein-midje)
