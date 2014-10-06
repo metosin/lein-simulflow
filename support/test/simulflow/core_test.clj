@@ -14,19 +14,7 @@
                                   :deps [:cljx]
                                   :flow ["cljsbuild" "once"]}}})
 
-(facts "queue"
-  (fact create-tasks
-    (create-tasks sample-conf nil)
-    => {:cljx [[] ["cljx" "once"]]
-        :cljs [['cljx] ["cljsbuild" "once"]]}
-
-    (create-tasks sample-conf #{:cljs})
-    => {:cljs [[] ["cljsbuild" "once"]]})
-
-  (fact execute-one
-    (let [<out (chan)]
-      (try<!! (with-chan (execute sample-conf <out nil))) => nil))
-
+#_(facts "queue"
   (fact queue
     (let [<events (chan)
           main (main-loop identity sample-conf <events)]
@@ -83,6 +71,38 @@
         (close! <ctrl))
       (chan->vec <events) => (repeat 3 path))))
 
+(facts select-jobs
+  (fact "Both modified"
+    (select-jobs {:cljx {:last-modified 2
+                         :last 1
+                         :active false}
+                  :cljs {:last-modified 2
+                         :last 1
+                         :active false
+                         :deps #{:cljx}}}) => [:cljx])
+
+  (fact "First run"
+    (select-jobs {:cljx {:last-modified nil
+                         :last nil}
+                  :cljs {:last-modified nil
+                         :last nil
+                         :deps #{:cljx}}}) => [:cljx])
+
+  (fact "Only other is modified"
+    (select-jobs {:cljx {:last-modified 2
+                         :last 2}
+                  :cljs {:last-modified 2
+                         :last 1
+                         :deps #{:cljx}}}) => [:cljs])
+
+  (fact "One is active"
+    (select-jobs {:cljx {:last-modified 3
+                         :last 2
+                         :active true}
+                  :cljs {:last-modified 2
+                         :last 1
+                         :deps #{:cljx}}}) => nil))
+
 (facts "e2e"
   (let [root (temp-directory)
         [cljx cljx-src] (temp-file root "src/cljx" "foo.cljx")
@@ -97,16 +117,16 @@
           (fn []
             (go
               (swap! i inc)
-              (<! (timeout 120))
               (spit cljx-clj-src (str "clj" @i))
-              (<! (timeout 120))
-              (spit cljx-cljs-src (str "cljs" @i)))))
+              (<! (timeout 20))
+              (spit cljx-cljs-src (str "cljs" @i))
+              (<! (timeout 20)))))
 
         cljs-mock
         (let [i (atom 0)]
           (fn []
             (go
-              (<! (timeout 120))
+              (<! (timeout 40))
               (spit cljs-js-src (str "js" (swap! i inc))))))
 
         e2e-conf
@@ -121,11 +141,11 @@
                      :simulflow e2e-conf}
                     <ctrl)]
     (go
-      (<! (timeout 100))
+      (<! (timeout 220))
       (spit cljs-src "foo")
       (<! (timeout 220))
       (spit cljx-src "foo")
-      (<! (timeout 1500))
+      (<! (timeout 2000))
       (close! <ctrl))
     (chan->vec main 2500) => truthy
     (slurp cljs-js-src) => "js3"

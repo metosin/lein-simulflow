@@ -1,5 +1,5 @@
 (ns simulflow.async
-  (:require [clojure.core.async :refer [timeout alt! go-loop]]))
+  (:require [clojure.core.async :refer [timeout alt! go-loop] :as async]))
 
 (defn read-events
   "Take all vals available from a port.
@@ -20,3 +20,25 @@
          <timeout ([] (if (empty? buffer)
                         (recur buffer)
                         buffer)))))))
+
+(defn batch-events
+  "Batch together events during the timeout-msecs."
+  ([<chan] (batch-events <chan 250))
+  ([<chan timeout-msecs]
+   (let [<out (async/chan)]
+     (go-loop [buffer #{}]
+       (let [<timeout (timeout timeout-msecs)]
+         (alt!
+           <chan ([v]
+                  (if v
+                    (recur (conj buffer v))
+                    (do
+                      (when-not (empty? buffer)
+                        (async/put! <out buffer))
+                      (async/close! <out))))
+
+           <timeout ([]
+                     (if-not (empty? buffer)
+                       (async/put! <out buffer))
+                     (recur #{})))))
+     <out)))
