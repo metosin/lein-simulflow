@@ -54,54 +54,53 @@
 
   (facts get-watch-dirs
     (map (comp str (partial nio/relativize dir))
-         (get-watch-dirs (:flows options)))
+         (get-watch-dirs options))
     => (contains ["target/generated/cljs"
                   "src/cljs"
                   "src/cljx"]
                  :in-any-order))
 
   (facts "watch dir"
-    (let [<ctrl (chan)
-          <events (watch [dir] <ctrl)]
+    (let [[<events <stop] (watch [dir])]
       (go
         (spit f "foo")
         (<! (timeout 50))
         (spit f "foo")
         (<! (timeout 100))
-        (close! <ctrl))
+        (close! <stop))
       (chan->vec <events) => (repeat 3 path))))
 
-(facts select-jobs
+(facts select-tasks
   (fact "Both modified"
-    (select-jobs {:cljx {:last-modified 2
-                         :last 1
-                         :active false}
-                  :cljs {:last-modified 2
-                         :last 1
-                         :active false
-                         :deps #{:cljx}}}) => [:cljx])
+    (select-tasks {:cljx {:last-modified 2
+                          :last 1
+                          :active? false}
+                   :cljs {:last-modified 2
+                          :last 1
+                          :active? false
+                          :deps #{:cljx}}}) => [:cljx])
 
   (fact "First run"
-    (select-jobs {:cljx {:last-modified nil
-                         :last nil}
-                  :cljs {:last-modified nil
-                         :last nil
-                         :deps #{:cljx}}}) => [:cljx])
+    (select-tasks {:cljx {:last-modified nil
+                          :last nil}
+                   :cljs {:last-modified nil
+                          :last nil
+                          :deps #{:cljx}}}) => [:cljx])
 
   (fact "Only other is modified"
-    (select-jobs {:cljx {:last-modified 2
-                         :last 2}
-                  :cljs {:last-modified 2
-                         :last 1
-                         :deps #{:cljx}}}) => [:cljs])
+    (select-tasks {:cljx {:last-modified 2
+                          :last 2}
+                   :cljs {:last-modified 2
+                          :last 1
+                          :deps #{:cljx}}}) => [:cljs])
 
   (fact "One is active"
-    (select-jobs {:cljx {:last-modified 3
-                         :last 2
-                         :active true}
-                  :cljs {:last-modified 2
-                         :last 1
-                         :deps #{:cljx}}}) => nil))
+    (select-tasks {:cljx {:last-modified 3
+                          :last 2
+                          :active? true}
+                   :cljs {:last-modified 2
+                          :last 1
+                          :deps #{:cljx}}}) => nil))
 
 (facts "e2e"
   (let [root (temp-directory)
@@ -136,17 +135,15 @@
                          :deps [:cljx]
                          :flow cljs-mock}}}
 
-        <ctrl (chan)
-        main (start {:root (str root)
-                     :simulflow e2e-conf}
-                    <ctrl)]
+        [main <stop] (start {:root (str root)
+                             :simulflow e2e-conf})]
     (go
       (<! (timeout 220))
       (spit cljs-src "foo")
       (<! (timeout 220))
       (spit cljx-src "foo")
       (<! (timeout 2000))
-      (close! <ctrl))
+      (close! <stop))
     (chan->vec main 2500) => []
     (slurp cljs-js-src) => "js3"
     (slurp cljx-cljs-src) => "cljs2"))

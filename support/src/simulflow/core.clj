@@ -1,5 +1,5 @@
 (ns simulflow.core
-  (:require [clojure.core.async :refer [go <! put! alt! timeout go-loop chan close!] :as async]
+  (:require [clojure.core.async :refer [go <! put! alt! timeout go-loop chan close! mult tap] :as async]
             [clojure.java.io :refer [file]]
             [clojure.string :as string]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
@@ -14,34 +14,38 @@
 (defn ts [] (System/currentTimeMillis))
 
 (defn execute
-  [queue [task-k {:keys [last-modified]}] <return <out]
-  (go
-    (put! <out [:started-task task-k])
-    (let [start (ts)
-          f (-> queue task-k :flow)]
+  [<return <out queue task-k]
+  (let [start (ts)
+        {:keys [flow last-modified]} (get queue task-k)]
+    (go
+      (put! <out [:started-task task-k])
       (try
-        (<! (f))
+        (<! (flow))
         (put! <out [:finished-task task-k (- (ts) start)])
-        (put! <return [task-k last-modified])
+        (put! <return [task-k (or last-modified start)])
         (catch Exception e
-          (put! <out [:exception (.getMessage e) (- (ts) start)]))))))
+          (put! <out [:exception (.getMessage e) (- (ts) start)]))))
+    (assoc-in queue [task-k :active?] true)))
 
-(defn select-jobs [queue]
-  (let [active-tasks (->> queue (filter (comp :active val)) keys)
-        changed (->> queue
-                     (filter (fn [[_ {:keys [last last-modified]}]]
-                               (or (not last) (not last-modified) (> last-modified last))))
-                     keys)
+(defn- changed?
+  [{:keys [last last-modified]}]
+  (or (not last) (and last-modified (> last-modified last))))
+
+(defn- dep-pending?
+  [changed-or-active v]
+  (some (partial contains? changed-or-active) (:deps v)))
+
+(defn- should-run?
+  [changed-or-active {:keys [active?] :as v}]
+  (and (not active?)
+       (changed? v)
+       (not (dep-pending? changed-or-active v))))
+
+(defn select-tasks [queue]
+  (let [active-tasks (->> queue (filter (comp :active? val)) keys)
+        changed (->> queue (filter (comp changed? val)) keys)
         changed-or-active (into #{} (concat active-tasks changed))]
-    (->> queue
-         (remove (fn [[k {:keys [last last-modified active]}]]
-                   ; Don't start this is already active
-                   (or active
-                       ; Don't start if hasn't been modified
-                       (and last last-modified (<= last-modified last))
-                       ; Don't start if some of deps has changed or is active
-                       (some (partial contains? changed-or-active) (-> queue k :deps)))))
-         keys)))
+    (->> queue (filter (comp (partial should-run? changed-or-active) val)) keys)))
 
 (defn skip-event? [event]
   (or
@@ -49,20 +53,19 @@
     (re-matches #".*~$" (str (:file event)))))
 
 (defn watch
-  [dirs <ctrl]
+  [dirs]
   (let [<events (chan)
+        <stop (chan 1)
         watcher (apply watch-dir
                        (fn [v]
                          (when-not (skip-event? v)
                            (put! <events (nio/path (:file v)))))
                        dirs)]
-    (go-loop []
-      (if (<! <ctrl)
-        (recur)
-        (do
-          (close-watcher watcher)
-          (close! <events))))
-    <events))
+    (go
+      (<! <stop)
+      (close-watcher watcher)
+      (close! <events))
+    [<events <stop]))
 
 (defn path->tasks
   [queue file-path]
@@ -75,12 +78,9 @@
                     (:watch flow)))
           #{} queue))
 
-(defn start-jobs [queue <return <out jobs]
-  (reduce (fn [queue job]
-            (let [queue (update-in queue [job :last-modified] (fnil identity (ts)))]
-              (execute queue [job (get queue job)] <return <out)
-              (assoc-in queue [job :active] true)))
-          queue jobs))
+(defn start-tasks [queue <return <out]
+  (reduce (partial execute <return <out)
+          queue (select-tasks queue)))
 
 (defn add-events [queue events]
   (reduce (fn [queue event]
@@ -90,48 +90,50 @@
                       queue tasks)))
           queue events))
 
-(defn job-ready [queue [k v]]
+(defn task-ready [queue [k v]]
   (-> queue
-      (assoc-in [k :active] false)
+      (assoc-in [k :active?] false)
       (assoc-in [k :last] v)))
+
+(defn log-changes [<out <events]
+  (go-loop []
+    (let [v (<! <events)]
+      (when v
+        (put! <out [:file-changed v])
+        (recur)))))
 
 (defn main-loop
   "Creates a loop which will read <events as long as the channel is open.
    Executes tasks from events."
   [options <events]
   (let [<out (chan)
-        <events (batch-events <events 50)
-        ; Tap?
-        <events (async/map (fn [v]
-                             (put! <out [:file-changed v])
-                             v)
-                           [<events])
+        events-mult (mult (batch-events <events 50))
+        <events (tap events-mult (chan))
         <return (chan)]
+    (log-changes <out (tap events-mult (chan)))
     (go-loop [queue (:flows options)]
-      (let [jobs (select-jobs queue)
-            queue (start-jobs queue <return <out jobs)]
+      (let [queue (start-tasks queue <return <out)]
         (alt!
           <events ([v] (if v
                          (recur (add-events queue v))
                          (do
                            (put! <out [:exit (ts)])
                            (close! <out))))
-          <return ([v] (recur (job-ready queue v))))))
+          <return ([v] (recur (task-ready queue v))))))
     <out))
 
-(defn get-watch-dirs [options]
-  (apply concat (map (comp
-                       :watch
-                       val)
-                     options)))
+(defn get-watch-dirs
+  "Given options map, create vector of :watch values."
+  [options]
+  (->> (:flows options)
+       (map (comp :watch val))
+       (apply concat)))
 
 (defn start
-  [project <ctrl]
+  [project]
   (let [root (:root project)
         options (coerce-config! root (:simulflow project))
-
-        watches (get-watch-dirs (:flows options))
-        <events (watch (map (comp file str) watches) <ctrl)]
-    (main-loop
-      options
-      <events)))
+        watches (get-watch-dirs options)
+        [<events <stop] (watch (map (comp file str) watches))
+        <out (main-loop options <events)]
+    [<out <stop]))
