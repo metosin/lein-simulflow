@@ -50,7 +50,7 @@
       path (nio/path f)]
 
   (facts path->task
-    (path->tasks options path) => #{:cljs})
+    (path->tasks (:flows options) path) => #{:cljs})
 
   (facts get-watch-dirs
     (map (comp str (partial nio/relativize dir))
@@ -147,6 +147,6 @@
       (spit cljx-src "foo")
       (<! (timeout 2000))
       (close! <ctrl))
-    (chan->vec main 2500) => truthy
+    (chan->vec main 2500) => []
     (slurp cljs-js-src) => "js3"
     (slurp cljx-cljs-src) => "cljs2"))

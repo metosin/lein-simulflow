@@ -13,13 +13,14 @@
 
 (defn ts [] (System/currentTimeMillis))
 
-(defn execute2
-  [options [task-k {:keys [last-modified]}] <return <out]
+(defn execute
+  [queue [task-k {:keys [last-modified]}] <return <out]
   (go
     (put! <out [:started-task task-k])
-    (let [start (ts)]
+    (let [start (ts)
+          f (-> queue task-k :flow)]
       (try
-        (<! ((-> options :flows (get task-k) :flow)))
+        (<! (f))
         (put! <out [:finished-task task-k (- (ts) start)])
         (put! <return [task-k last-modified])
         (catch Exception e
@@ -33,13 +34,13 @@
                      keys)
         changed-or-active (into #{} (concat active-tasks changed))]
     (->> queue
-         (remove (fn [[k {:keys [last last-modified active deps]}]]
+         (remove (fn [[k {:keys [last last-modified active]}]]
                    ; Don't start this is already active
                    (or active
                        ; Don't start if hasn't been modified
                        (and last last-modified (<= last-modified last))
                        ; Don't start if some of deps has changed or is active
-                       (some (partial contains? changed-or-active) deps))))
+                       (some (partial contains? changed-or-active) (-> queue k :deps)))))
          keys)))
 
 (defn skip-event? [event]
@@ -64,7 +65,7 @@
     <events))
 
 (defn path->tasks
-  [options file-path]
+  [queue file-path]
   (reduce (fn [acc [task-k flow]]
             (reduce (fn [acc task-path]
                       (if (nio/starts-with? file-path task-path)
@@ -72,60 +73,50 @@
                         acc))
                     acc
                     (:watch flow)))
-          #{}
-          (:flows options)))
+          #{} queue))
 
-(defn events->tasks
-  "Takes set of files and maps those to set of tasks"
-  [flows events]
-  (some->>
-    events
-    (map (partial path->tasks flows))
-    (apply concat)
-    set))
+(defn start-jobs [queue <return <out jobs]
+  (reduce (fn [queue job]
+            (let [queue (update-in queue [job :last-modified] (fnil identity (ts)))]
+              (execute queue [job (get queue job)] <return <out)
+              (assoc-in queue [job :active] true)))
+          queue jobs))
 
-(defn- build-queue [options]
-  (for-map [[k v] (:flows options)]
-    k {:last-modified nil
-       :last nil
-       :deps (:deps v)}))
+(defn add-events [queue events]
+  (reduce (fn [queue event]
+            (let [tasks (path->tasks queue event)]
+              (reduce (fn [queue task]
+                        (assoc-in queue [task :last-modified] (ts)))
+                      queue tasks)))
+          queue events))
+
+(defn job-ready [queue [k v]]
+  (-> queue
+      (assoc-in [k :active] false)
+      (assoc-in [k :last] v)))
 
 (defn main-loop
   "Creates a loop which will read <events as long as the channel is open.
    Executes tasks from events."
-  [events->tasks options <events]
+  [options <events]
   (let [<out (chan)
         <events (batch-events <events 50)
+        ; Tap?
         <events (async/map (fn [v]
                              (put! <out [:file-changed v])
                              v)
                            [<events])
         <return (chan)]
-    ; NOTE: Queue should maybe contain timestamps so tasks are only removed from queue
-    ; when it's executed for latest file events
-    (go-loop [queue (build-queue options)]
+    (go-loop [queue (:flows options)]
       (let [jobs (select-jobs queue)
-            queue (reduce (fn [queue job]
-                            (let [queue (update-in queue [job :last-modified] (fnil identity (ts)))]
-                              (execute2 options [job (get queue job)] <return <out)
-                              (assoc-in queue [job :active] true)))
-                          queue
-                          jobs)]
+            queue (start-jobs queue <return <out jobs)]
         (alt!
-          <events ([v]
-                   (if v
-                         (let [tasks (events->tasks v)
-                               queue (reduce (fn [queue task]
-                                               (assoc-in queue [task :last-modified] (ts)))
-                                             queue
-                                             tasks)]
-                           (recur queue))
+          <events ([v] (if v
+                         (recur (add-events queue v))
                          (do
                            (put! <out [:exit (ts)])
                            (close! <out))))
-          <return ([[k v]] (recur (-> queue
-                                      (assoc-in [k :active] false)
-                                      (assoc-in [k :last] v)))))))
+          <return ([v] (recur (job-ready queue v))))))
     <out))
 
 (defn get-watch-dirs [options]
@@ -142,6 +133,5 @@
         watches (get-watch-dirs (:flows options))
         <events (watch (map (comp file str) watches) <ctrl)]
     (main-loop
-      (partial events->tasks options)
       options
       <events)))
