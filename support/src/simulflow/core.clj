@@ -28,24 +28,24 @@
     (assoc-in queue [task-k :active?] true)))
 
 (defn- changed?
-  [{:keys [last last-modified]}]
+  [[_ {:keys [last last-modified]}]]
   (or (not last) (and last-modified (> last-modified last))))
 
 (defn- dep-pending?
-  [changed-or-active v]
+  [changed-or-active [_ v]]
   (some (partial contains? changed-or-active) (:deps v)))
 
 (defn- should-run?
-  [changed-or-active {:keys [active?] :as v}]
+  [changed-or-active [_ {:keys [active?]} :as x]]
   (and (not active?)
-       (changed? v)
-       (not (dep-pending? changed-or-active v))))
+       (changed? x)
+       (not (dep-pending? changed-or-active x))))
 
 (defn select-tasks [queue]
-  (let [active-tasks (->> queue (filter (comp :active? val)) keys)
-        changed (->> queue (filter (comp changed? val)) keys)
+  (let [active-tasks (->> queue (filter :active?) keys)
+        changed      (->> queue (filter changed?) keys)
         changed-or-active (into #{} (concat active-tasks changed))]
-    (->> queue (filter (comp (partial should-run? changed-or-active) val)) keys)))
+    (->> queue (filter (partial should-run? changed-or-active)) keys)))
 
 (defn skip-event? [event]
   (or
@@ -67,18 +67,21 @@
       (close! <events))
     [<events <stop]))
 
-(defn path->tasks
-  [queue file-path]
-  (reduce (fn [acc [task-k flow]]
-            (reduce (fn [acc task-path]
-                      (if (nio/starts-with? file-path task-path)
-                        (conj acc task-k)
-                        acc))
-                    acc
-                    (:watch flow)))
-          #{} queue))
+(defn- watched?
+  "Test if given task is watching for changes in the given path."
+  [event-path [_ {:keys [watch]}]]
+  (some (partial nio/starts-with? event-path) watch))
 
-(defn start-tasks [queue <return <out]
+(defn path->tasks
+  "Get set of task-keys watching the given path."
+  [queue event-path]
+  (->> queue
+       (filter (partial watched? event-path))
+       keys
+       set))
+
+(defn start-tasks
+  [<return <out queue]
   (reduce (partial execute <return <out)
           queue (select-tasks queue)))
 
@@ -112,7 +115,7 @@
         <return (chan)]
     (log-changes <out (tap events-mult (chan)))
     (go-loop [queue (:flows options)]
-      (let [queue (start-tasks queue <return <out)]
+      (let [queue (start-tasks <return <out queue)]
         (alt!
           <events ([v] (if v
                          (recur (add-events queue v))
