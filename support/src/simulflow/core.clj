@@ -41,13 +41,15 @@
        (changed? x)
        (not (dep-pending? changed-or-active x))))
 
-(defn select-tasks [queue]
+(defn select-tasks
+  [queue]
   (let [active-tasks (->> queue (filter :active?) keys)
         changed      (->> queue (filter changed?) keys)
         changed-or-active (into #{} (concat active-tasks changed))]
     (->> queue (filter (partial should-run? changed-or-active)) keys)))
 
-(defn skip-event? [event]
+(defn skip-event?
+  [event]
   (or
     ; Backup files
     (re-matches #".*~$" (str (:file event)))))
@@ -74,7 +76,7 @@
 
 (defn path->tasks
   "Get set of task-keys watching the given path."
-  [queue event-path]
+  [event-path queue]
   (->> queue
        (filter (partial watched? event-path))
        keys
@@ -85,20 +87,23 @@
   (reduce (partial execute <return <out)
           queue (select-tasks queue)))
 
-(defn add-events [queue events]
+(defn add-events
+  [events queue]
   (reduce (fn [queue event]
-            (let [tasks (path->tasks queue event)]
+            (let [tasks (path->tasks event queue)]
               (reduce (fn [queue task]
                         (assoc-in queue [task :last-modified] (ts)))
                       queue tasks)))
           queue events))
 
-(defn task-ready [queue [k v]]
+(defn task-ready
+  [[k last-modified] queue]
   (-> queue
       (assoc-in [k :active?] false)
-      (assoc-in [k :last] v)))
+      (assoc-in [k :last] last-modified)))
 
-(defn log-changes [<out <events]
+(defn log-changes
+  [<out <events]
   (go-loop []
     (let [v (<! <events)]
       (when v
@@ -118,11 +123,11 @@
       (let [queue (start-tasks <return <out queue)]
         (alt!
           <events ([v] (if v
-                         (recur (add-events queue v))
+                         (recur (add-events v queue))
                          (do
                            (put! <out [:exit (ts)])
                            (close! <out))))
-          <return ([v] (recur (task-ready queue v))))))
+          <return ([v] (recur (task-ready v queue))))))
     <out))
 
 (defn get-watch-dirs

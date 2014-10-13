@@ -50,7 +50,7 @@
       path (nio/path f)]
 
   (facts path->task
-    (path->tasks (:flows options) path) => #{:cljs})
+    (path->tasks path (:flows options)) => #{:cljs})
 
   (facts get-watch-dirs
     (map (comp str (partial nio/relativize dir))
