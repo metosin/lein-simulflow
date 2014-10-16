@@ -6,7 +6,10 @@
             :distribution :repo}
 
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [org.clojure/clojurescript "0.0-2322"]]
+                 [org.clojure/clojurescript "0.0-2322"]
+
+                 ;; FIXME:
+                 [simulflow "0.1.0-SNAPSHOT"]]
 
   :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]
                              [lein-cljsbuild "1.0.3"]

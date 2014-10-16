@@ -10,5 +10,4 @@
   :min-lein-version "2.0.0"
 
   :dependencies [[simulflow "0.1.0-SNAPSHOT"]
-                 [myguidingstar/clansi "1.3.0"]
-                 [output-to-chan "0.1.0-SNAPSHOT"]])
+                 [myguidingstar/clansi "1.3.0"]])

@@ -1,5 +1,6 @@
 (ns simulflow.core
-  (:require [clojure.core.async :refer [go <! put! alt! timeout go-loop chan close! mult tap] :as async]
+  (:require [clansi.core :refer :all]
+            [clojure.core.async :refer [go <! put! alt! timeout go-loop chan close! mult tap] :as async]
             [clojure.java.io :refer [file]]
             [clojure.string :as string]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
@@ -145,3 +146,21 @@
         [<events <stop] (watch (map (comp file str) watches))
         <out (main-loop options <events)]
     [<out <stop]))
+
+
+(def events {:init (style "Simulflow started" :green)
+             :started-task (style ">>> %s" :green)
+             :finished-task (style "<<< %s (%d ms)" :green)
+             :file-changed (str (ansi :green) "+++ " (ansi :reset) "%s")
+             :exception (style "!!! %s: %s" :red)
+             :exit (style "Good bye" :red)
+             :task (str (ansi :blue) "%s: " (ansi :reset) "%s")})
+
+(defn output [[event & args]]
+  (let [e (get events event)
+        args (map (fn [v]
+                    (if (keyword? v)
+                      (name v)
+                      v))
+                  args)]
+    (println (apply format e args))))
