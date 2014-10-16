@@ -2,22 +2,42 @@
   (:require [clansi.core :refer :all]
             [clojure.core.async :refer [<! <!! alt! put! go go-loop chan]]
             [clojure.java.io :as io]
+            [leiningen.core.eval :refer [eval-in-project]]
             [leiningen.core.main :refer [apply-task lookup-alias]]
-            [leiningen.do :refer [group-args]]
             [output-to-chan.core :refer [with-chan-writer]]
             [plumbing.core :refer [map-vals]]
             [simulflow.core :refer [start]]))
 
-(defn go-lein-task [<out project task-name args]
+(defmulti task (fn [_ {:keys [flow]}] flow))
+
+(defmethod task :cljx
+  [project _]
+  (if-let [builds (-> project :cljx :builds)]
+    (eval-in-project
+      (-> project
+          (assoc :prep-tasks ["javac"]))
+      `(do
+         (#'cljx.core/cljx-compile '~builds)
+         ~(when (-> project :eval-in name (= "subprocess"))
+            '(shutdown-agents)))
+      '(require 'cljx.core))))
+
+(defmethod task :default
+  [project {:keys [flow] :as v}]
+  (if (vector? flow)
+    (apply-task (lookup-alias (first flow) project) project (rest flow))
+    flow))
+
+(defn task-wrapper [<out project k v]
   (let [<task-out (chan)]
     (go-loop []
-      (put! <out [:task task-name (<! <task-out)])
+      (put! <out [:task k (<! <task-out)])
       (recur))
     (fn []
       (go
         (with-chan-writer
           <task-out
-          (apply-task (lookup-alias task-name project) project args))))))
+          (task project v))))))
 
 (def events {:init (style "Simulflow started" :green)
              :started-task (style ">>> %s" :green)
@@ -27,8 +47,14 @@
              :exit (style "Good bye" :red)
              :task (str (ansi :blue) "%s: " (ansi :reset) "%s")})
 
-(defn output [event]
-  (println (apply format (get events (first event) "") (rest event))))
+(defn output [[event & args]]
+  (let [e (get events event)
+        args (map (fn [v]
+                    (if (keyword? v)
+                      (name v)
+                      v))
+                  args)]
+    (println (apply format e args))))
 
 (defn simulflow
   "Run multiple tasks..."
@@ -38,11 +64,9 @@
         project
         (update-in project [:simulflow :flows]
                    (fn [flows]
-                     (map-vals (fn [{:keys [flow] :as v}]
-                                 (if (vector? flow)
-                                   (assoc v :flow (go-lein-task <task-out project (first flow) (rest flow)))
-                                   v))
-                               flows)))
+                     (into {} (map (fn [[k {:keys [flow] :as v}]]
+                                     [k (assoc v :flow (task-wrapper <task-out project k v))])
+                                   flows))))
         [<out <stop] (start project)]
     (<!! (go-loop []
            (alt!

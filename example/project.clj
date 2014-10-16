@@ -34,7 +34,7 @@
                    :output-path "target/generated/cljs"}]}
 
   :simulflow {:flows {:cljx  {:watch "src/cljx"
-                              :flow ["cljx" "once"]}
+                              :flow :cljx}
                       :cljs  {:watch ["src/cljs" "target/generated/cljs"]
                               :deps [:cljx]
                               :flow ["cljsbuild" "once"]}
