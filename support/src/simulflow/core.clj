@@ -21,10 +21,10 @@
       (put! <out [:started-task task-k])
       (try
         (<! (flow))
-        (put! <out [:finished-task task-k (- (ts) start)])
-        (put! <return [task-k (or last-modified start)])
         (catch Exception e
-          (put! <out [:exception (.getMessage e) (- (ts) start)]))))
+          (put! <out [:exception task-k (.getMessage e) (- (ts) start)])))
+      (put! <out [:finished-task task-k (- (ts) start)])
+      (put! <return [task-k (or last-modified start)]))
     (assoc-in queue [task-k :active?] true)))
 
 (defn- changed?

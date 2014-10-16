@@ -56,6 +56,7 @@ plugins check [this](./doc/notes.md).
   - Cljsbuild requires that Cljx has written the cljs sources
 - Tasks run in parallel where possible
   - Eg. cljx and less
+- Prepend output from tasks with the task name (by capturing *out*)
 
 ## TODO
 
@@ -66,8 +67,6 @@ plugins check [this](./doc/notes.md).
   - Start: cljs + cljx queued, cljx writes .cljs which queues cljs again...
   event though cljs is already queued -> cljs runs too many times.
 - [ ] Everything is slow. Cljs is not using incremental compiling etc. Plugin auto tasks have some state... Do something...
-- [ ] Wrap output from tasks to provide pretty output where you see from which plugin the each output message is
-  - [ ] Filtering
 
 ## NOTES
 
