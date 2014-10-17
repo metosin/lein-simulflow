@@ -155,23 +155,27 @@
 (def events {:init (style "Simulflow started" :green)
              :started-task (style ">>> %s" :green)
              :finished-task (style "<<< %s (%d ms)" :green)
-             :file-changed (str (ansi :green) "+++ " (ansi :reset) "%s")
+             :file-changed (fn [root [files]]
+                             (style (str "+++ " (clojure.string/join ", " (map (partial nio/relativize root) files))) :yellow))
              :exception (style "!!! %s: %s" :red)
              :exit (style "Good bye" :red)
              :task (str (ansi :blue) "%s: " (ansi :reset) "%s")})
 
-(defn output [[event & args]]
+(defn output [root [event & args]]
   (let [e (get events event)
         args (map (fn [v]
                     (if (keyword? v)
                       (name v)
                       v))
                   args)]
-    (println (apply format e args))))
+    (println (if (fn? e)
+               (e root args)
+               (apply format e args)))))
 
 (defn plugin-loop [opts]
   (let [; Map lein task vectors to functions
         <task-out (chan)
+        root (:root opts)
         opts
         (update-in opts [:simulflow :flows]
                    (fn [flows]
@@ -184,8 +188,8 @@
     (<!! (go-loop []
            (alt!
              <out ([v] (when v
-                         (output v)
+                         (output root v)
                          (recur)))
              <task-out ([v]
-                        (output v)
+                        (output root v)
                         (recur)))))))
