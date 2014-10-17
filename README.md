@@ -56,26 +56,16 @@ plugins check [this](./doc/notes.md).
   - Cljsbuild requires that Cljx has written the cljs sources
 - Tasks run in parallel where possible
   - Eg. cljx and less
-- Prepend output from tasks with the task name (by capturing *out*)
+- Prepend output from tasks with the task name (by capturing \*out\*)
 - Runs all tasks in one project JVM
   - Saves memory in comparison to running e.g. lein cljx and lein cljsbuild seperately
 
 ## TODO
 
 - [ ] Test how well the `java.nio.file.WatchService` works for OS X
-- [x] Instead of batching file events (which doesn't work here) try alternative approach:
-  - For each main loop iteration: take all values from channel until timeout
-- [x] Handle depenencies differently.
-  - Start: cljs + cljx queued, cljx writes .cljs which queues cljs again...
-  event though cljs is already queued -> cljs runs too many times.
-- [x] Everything is slow. Cljs is not using incremental compiling etc. Plugin auto tasks have some state... Do something...
 
 ## NOTES
 
-- Is the dependancy stuff useful for anything but the start up?
-  - Conjure up some sequence diagrams...
-- Is it a good idea to define output dirs for the tasks
-  - Would it be simpler to just define from which other tasks the task depends?
 - Might be this feature should be built into Leinigen and plugins would
 implement some API to provide long running tasks.
 
