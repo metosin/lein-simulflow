@@ -1,6 +1,6 @@
 (ns simulflow.core
   (:require [clansi.core :refer :all]
-            [clojure.core.async :refer [go <! put! alt! timeout go-loop chan close! mult tap] :as async]
+            [clojure.core.async :refer [go <! <!! put! alt! timeout go-loop chan close! mult tap] :as async]
             [clojure.java.io :refer [file]]
             [clojure.string :as string]
             [juxt.dirwatch :refer [watch-dir close-watcher]]
@@ -10,7 +10,8 @@
             [plumbing.graph-async :refer [async-compile]]
             [schema.core :as s]
             [simulflow.async :refer [read-events batch-events]]
-            [simulflow.config :refer [coerce-config!]]))
+            [simulflow.config :refer [coerce-config!]]
+            simulflow.wrappers))
 
 (defn ts [] (System/currentTimeMillis))
 
@@ -164,3 +165,22 @@
                       v))
                   args)]
     (println (apply format e args))))
+
+(defn plugin-loop [opts]
+  (let [; Map lein task vectors to functions
+        <task-out (chan)
+        opts
+        (update-in opts [:simulflow :flows]
+                   (fn [flows]
+                     (into {} (map (fn [[k v]]
+                                     [k (assoc v :flow (simulflow.wrappers/task-wrapper <task-out k v))])
+                                   flows))))
+        [<out <stop] (start opts)]
+    (<!! (go-loop []
+           (alt!
+             <out ([v] (when v
+                         (output v)
+                         (recur)))
+             <task-out ([v]
+                        (output v)
+                        (recur)))))))

@@ -2,22 +2,29 @@
   (:require [clojure.core.async :refer [<! <!! alt! put! go go-loop chan]]
             [output-to-chan.core :refer [with-chan-writer]]))
 
-(defmulti task (fn [_ {:keys [flow]}] flow))
+(defmulti task-opts (fn [id project] id))
+
+(defmethod task-opts :cljx [_ project]
+  (-> project :cljx :builds))
+
+(defmethod task-opts :default [_ _]
+  nil)
+
+(defmulti task :flow)
 
 (defmethod task :cljx
-  [project _]
+  [{:keys [opts]}]
   (require 'cljx.core)
-  (if-let [builds (-> project :cljx :builds)]
-    ((resolve 'cljx.core/cljx-compile) '~builds)))
+  ((resolve 'cljx.core/cljx-compile) opts))
 
 (defmethod task :default
-  [project {:keys [flow] :as v}]
+  [{:keys [flow] :as v}]
   nil)
   ; (if (vector? flow)
   ;   (apply-task (lookup-alias (first flow) project) project (rest flow))
   ;   flow))
 
-(defn task-wrapper [<out project k v]
+(defn task-wrapper [<out k v]
   (let [<task-out (chan)]
     (go-loop []
       (put! <out [:task k (<! <task-out)])
@@ -26,4 +33,4 @@
       (go
         (with-chan-writer
           <task-out
-          (task project v))))))
+          (task v))))))
