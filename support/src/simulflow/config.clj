@@ -8,7 +8,8 @@
 
 (def Config {:flows {s/Keyword {:watch [Path]
                                 :flow s/Any
-                                (s/optional-key :deps) [s/Keyword]}}})
+                                (s/optional-key :deps) [s/Keyword]
+                                s/Keyword s/Any}}})
 
 (defn wrap-into [col item]
   (into col (if (coll? item)
