@@ -15,4 +15,8 @@
       project
       `(simulflow.core/plugin-loop ~opts)
       ; FIXME:
-      '(require 'clojure.core.async 'simulflow.core 'simulflow.wrappers 'cljx.core 'cljsbuild.compiler 'cljs.env))))
+      '(require 'clojure.core.async
+                'simulflow.core 'simulflow.wrappers
+                'cljx.core
+                'cljsbuild.compiler 'cljs.env
+                'leiningen.less.engine 'leiningen.less.compiler 'leiningen.less.nio))))

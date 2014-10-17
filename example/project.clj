@@ -10,7 +10,8 @@
 
                  ;; FIXME:
                  [simulflow "0.1.0-SNAPSHOT"]
-                 [cljsbuild "1.0.3"]]
+                 [cljsbuild "1.0.3"]
+                 [lein-less "1.7.2"]]
 
   :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]
                              [lein-cljsbuild "1.0.3"]
