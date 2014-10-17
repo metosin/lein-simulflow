@@ -16,17 +16,19 @@
 (defn ts [] (System/currentTimeMillis))
 
 (defn execute
-  [<return <out queue task-k]
+  [<return <out queue [task-k v]]
   (let [start (ts)
-        {:keys [flow last-modified]} (get queue task-k)]
+        {:keys [fun last-modified]} (get queue task-k)]
     (go
       (put! <out [:started-task task-k])
       (try
-        (<! (flow))
+        (let [state (<! (fun v))]
+          (put! <return [task-k (or last-modified start) state]))
         (catch Exception e
-          (put! <out [:exception task-k (.getMessage e) (- (ts) start)])))
-      (put! <out [:finished-task task-k (- (ts) start)])
-      (put! <return [task-k (or last-modified start)]))
+          (put! <out [:exception task-k (.getMessage e) (- (ts) start)])
+          (put! <return [task-k (or last-modified start)]))
+        (finally
+          (put! <out [:finished-task task-k (- (ts) start)]))))
     (assoc-in queue [task-k :active?] true)))
 
 (defn- changed?
@@ -48,7 +50,7 @@
   (let [active-tasks (->> queue (filter :active?) keys)
         changed      (->> queue (filter changed?) keys)
         changed-or-active (into #{} (concat active-tasks changed))]
-    (->> queue (filter (partial should-run? changed-or-active)) keys)))
+    (filter (partial should-run? changed-or-active) queue)))
 
 (defn skip-event?
   [event]
@@ -99,10 +101,11 @@
           queue events))
 
 (defn task-ready
-  [[k last-modified] queue]
+  [[k last-modified state] queue]
   (-> queue
-      (assoc-in [k :active?] false)
-      (assoc-in [k :last] last-modified)))
+      (update-in [k :state] #(or state %))
+      (assoc-in [k :last] last-modified)
+      (assoc-in [k :active?] false)))
 
 (defn log-changes
   [<out <events]
@@ -173,7 +176,9 @@
         (update-in opts [:simulflow :flows]
                    (fn [flows]
                      (into {} (map (fn [[k v]]
-                                     [k (assoc v :flow (simulflow.wrappers/task-wrapper <task-out k v))])
+                                     [k (assoc v
+                                               :fun (simulflow.wrappers/task-wrapper <task-out k)
+                                               :state (simulflow.wrappers/task-init v))])
                                    flows))))
         [<out <stop] (start opts)]
     (<!! (go-loop []

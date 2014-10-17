@@ -9,4 +9,7 @@
   :eval-in-leiningen true
   :min-lein-version "2.0.0"
 
-  :dependencies [[simulflow "0.1.0-SNAPSHOT"]])
+  :dependencies [[simulflow "0.1.0-SNAPSHOT"]
+
+                 ; FIXME:
+                 [lein-cljsbuild "1.0.3"]])

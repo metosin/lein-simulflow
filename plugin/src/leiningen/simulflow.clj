@@ -14,4 +14,5 @@
     (eval-in-project
       project
       `(simulflow.core/plugin-loop ~opts)
-      '(require 'clojure.core.async 'simulflow.core 'simulflow.wrappers 'cljx.core))))
+      ; FIXME:
+      '(require 'clojure.core.async 'simulflow.core 'simulflow.wrappers 'cljx.core 'cljsbuild.compiler 'cljs.env))))

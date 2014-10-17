@@ -9,7 +9,8 @@
                  [org.clojure/clojurescript "0.0-2322"]
 
                  ;; FIXME:
-                 [simulflow "0.1.0-SNAPSHOT"]]
+                 [simulflow "0.1.0-SNAPSHOT"]
+                 [cljsbuild "1.0.3"]]
 
   :profiles {:dev {:plugins [[lein-simulflow "0.1.0-SNAPSHOT"]
                              [lein-cljsbuild "1.0.3"]
@@ -40,6 +41,6 @@
                               :flow :cljx}
                       :cljs  {:watch ["src/cljs" "target/generated/cljs"]
                               :deps [:cljx]
-                              :flow ["cljsbuild" "once"]}
+                              :flow :cljs}
                       :less  {:watch "src/less"
-                              :flow ["less" "once"]}}})
+                              :flow :less}}})
