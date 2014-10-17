@@ -1,7 +1,6 @@
 (ns leiningen.simulflow
   (:require [leiningen.core.eval :refer [eval-in-project]]
-            simulflow.wrappers
-            aprint.core))
+            simulflow.wrappers))
 
 (defn simulflow
   "Run multiple tasks..."
@@ -12,7 +11,6 @@
                           (into {} (map (fn [[k {:keys [flow] :as v}]]
                                           [k (assoc v :opts (simulflow.wrappers/task-opts flow project))])
                                         flows))))]
-    (aprint.core/aprint opts)
     (eval-in-project
       project
       `(simulflow.core/plugin-loop ~opts)
