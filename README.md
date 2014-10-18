@@ -1,6 +1,6 @@
 # lein-simulflow [![Travis CI status](https://secure.travis-ci.org/metosin/lein-simulflow.png)](http://travis-ci.org/#!/metosin/lein-simulflow/builds)
 
-Combine several lein auto tasks for leaner workflow.
+Combine several long running lein tasks for leaner workflow.
 
 *NOTE: Very early version, not usable.
 Might be over-engineered.*
@@ -96,10 +96,11 @@ implement some API to provide long running tasks.
 is already quite complicated has too much "config magic".
   - I think the situation is similar to [Grunt JS Task Runner](http://gruntjs.com/)
   which many have replaced with [Gulp](http://gulpjs.com/).
-    - [Gruntfile](https://github.com/gruntjs/grunt/blob/master/Gruntfile.js)
-    has one big JS map with every plugin having top-level key on config.
-    - [gulpfile](https://github.com/gulpjs/gulp/#sample-gulpfilejs)
-    is JS source and tasks are composited from functions returning transform streams.
+    - [Gruntfile](https://github.com/gruntjs/grunt/blob/master/Gruntfile.js).
+    Config mostly defined on one big JS map with every plugin having top-level key on config.
+    - [gulpfile](https://github.com/gulpjs/gulp/#sample-gulpfilejs).
+    Tasks are composited from functions returning transform streams. One can use
+    higher-order functions to create parametrized tasks.
 
 ## Contact
 
