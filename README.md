@@ -42,7 +42,8 @@ $ lein cljx once # Because pdo might run cljsbuild before cljx is ready
 $ lein pdo cljx once, cljsbuild auto dev, less auto, midje :autotest
 ```
 
-Lein-simulflow will run your long running tasks in in one process so you'll only start two lein processes:
+Lein-simulflow will run your long running tasks in in one tasks and takes
+care of task dependencies:
 
 ```bash
 $ lein simulflow
@@ -59,8 +60,10 @@ started.
 |---| --------------- |
 | Plain      | 7 |
 | Trampoline | 4 |
-| Pdo        | 5 |
-| Simulflow  | 2 |
+| Pdo        | 4 |
+| Simulflow  | 2, 1 _with trampoline_ |
+
+*Note:* It could be that running all plugins in one JVM causes problems.
 
 ![Screenshot](./screenshot.png)
 
