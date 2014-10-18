@@ -15,8 +15,8 @@ better thinking.”
 
 Check [example project.clj](./example/project.clj).
 
-Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
-project.clj.
+~~Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
+project.clj.~~
 
 ```bash
 $ lein simulflow
@@ -33,15 +33,34 @@ $ lein less auto # or gulp, compass, etc.
 $ lein cljx auto
 $ lein cljsbuild auto dev # or lein fighweel dev
 $ lein midje :autotest
-$ lein repl
+```
+
+Or you could use [lein-pdo](https://github.com/Raynes/lein-pdo):
+
+```bash
+$ lein cljx once # Because pdo might run cljsbuild before cljx is ready
+$ lein pdo cljx once, cljsbuild auto dev, less auto, midje :autotest
 ```
 
 Lein-simulflow will run your long running tasks in in one process so you'll only start two lein processes:
 
 ```bash
 $ lein simulflow
-$ lein repl
 ```
+
+The difference between those is not only the number of commands to start the
+development env but also number of JVM's they launch. Each lein task will
+start a JVM to run the lein and many plugins (e.g. cljsbuild, cljs, midje, repl)
+start another JVM to run code in envinroment of the project.
+`lein trampoline` could be used to stop the lein JVM after the project JVM has
+started.
+
+|   | Number of JVM's |
+|---| --------------- |
+| Plain      | 7 |
+| Trampoline | 4 |
+| Pdo        | 5 |
+| Simulflow  | 2 |
 
 ![Screenshot](./screenshot.png)
 
@@ -50,6 +69,8 @@ plugins check [this](./doc/notes.md).
 
 ## Features
 
+- Works only with custom [wrappers](./support/src/simulflow/wrappers.clj):
+  - Cljsbuild, cljx, less
 - Watch for file changes using Java 7 API (uses inotify or similar OS provded API)
   - Means also that not every plugin has to implement file watching again
 - Tasks can depend on other tasks
