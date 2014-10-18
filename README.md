@@ -68,9 +68,6 @@ started.
 
 ![Screenshot](./screenshot.png)
 
-For notes about implementation and how this relates to other, similar,
-plugins check [this](./doc/notes.md).
-
 ## Features
 
 - Works only with custom [wrappers](./support/src/simulflow/wrappers.clj):
@@ -95,6 +92,14 @@ plugins check [this](./doc/notes.md).
 
 - Might be this feature should be built into Leinigen and plugins would
 implement some API to provide long running tasks.
+- Not sure if this best implemented as lein plugin. `project.clj`
+is already quite complicated has too much "config magic".
+  - I think the situation is similar to [Grunt JS Task Runner](http://gruntjs.com/)
+  which many have replaced with [Gulp](http://gulpjs.com/).
+    - [Gruntfile](https://github.com/gruntjs/grunt/blob/master/Gruntfile.js)
+    has one big JS map with every plugin having top-level key on config.
+    - [gulpfile](https://github.com/gulpjs/gulp/#sample-gulpfilejs)
+    is JS source and tasks are composited from functions returning transform streams.
 
 ## Contact
 
