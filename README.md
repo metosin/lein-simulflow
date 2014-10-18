@@ -1,9 +1,9 @@
 # lein-simulflow [![Travis CI status](https://secure.travis-ci.org/metosin/lein-simulflow.png)](http://travis-ci.org/#!/metosin/lein-simulflow/builds)
 
-Combine several long running lein tasks for leaner workflow.
+Combine several long running ~~lein~~ tasks for leaner workflow.
 
-*NOTE: Very early version, not usable.
-Might be over-engineered.*
+*NOTE: Very early version, not usable.*<br>
+*NOTE: Might be over-engineered.*
 
 ```
 “Daydreaming is the first awakening of what we call simulflow. It is
@@ -18,6 +18,8 @@ Check [example project.clj](./example/project.clj).
 
 ~~Put `[lein-simulflow "0.1.0-SNAPSHOT"]` into the `:plugins` vector of your
 project.clj.~~
+
+For now, install [output-to-chan](https://github.com/Deraen/output-to-chan), support and plugin using `lein install`.
 
 ```bash
 $ lein simulflow
@@ -72,7 +74,7 @@ started.
 
 - Works only with custom [wrappers](./support/src/simulflow/wrappers.clj):
   - Cljsbuild, cljx, less
-- Watch for file changes using Java 7 API (uses inotify or similar OS provded API)
+- Watch for file changes using Java 7 API (uses inotify or similar OS provided API)
   - Means also that not every plugin has to implement file watching again
 - Tasks can depend on other tasks
   - Cljsbuild requires that Cljx has written the cljs sources
@@ -90,8 +92,9 @@ started.
 
 ## NOTES
 
-- Might be this feature should be built into Leinigen and plugins would
+- Might be this feature should be built into Leiningen and plugins would
 implement some API to provide long running tasks.
+- If we are already running all tasks on project JVM, we might as well run them from repl...
 - Not sure if this best implemented as lein plugin. `project.clj`
 is already quite complicated has too much "config magic".
   - I think the situation is similar to [Grunt JS Task Runner](http://gruntjs.com/)
@@ -108,4 +111,4 @@ Ping `Deraen` on Freenode irc.
 
 I would like to hear if you have thoughts about how to solve the problem
 of many long running lein tasks, about this implementation or if you
-think that that the problem is non-existent.
+think that the problem is non-existent.
