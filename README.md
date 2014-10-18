@@ -3,6 +3,7 @@
 Combine several lein auto tasks for leaner workflow.
 
 *NOTE: Very early version, not usable*
+*NOTE: Might be over-engineered*
 
 ```
 “Daydreaming is the first awakening of what we call simulflow. It is
@@ -42,7 +43,7 @@ $ lein cljx once # Because pdo might run cljsbuild before cljx is ready
 $ lein pdo cljx once, cljsbuild auto dev, less auto, midje :autotest
 ```
 
-Lein-simulflow will run your long running tasks in in one tasks and takes
+Lein-simulflow will start your long running tasks with one command and takes
 care of task dependencies:
 
 ```bash
@@ -61,9 +62,9 @@ started.
 | Plain      | 7 |
 | Trampoline | 4 |
 | Pdo        | 4 |
-| Simulflow  | 2, 1 _with trampoline_ |
+| Simulflow  | 2, _(1 with trampoline)_ |
 
-*Note:* It could be that running all plugins in one JVM causes problems.
+*Note: It could be that running all plugins in one JVM causes problems.*
 
 ![Screenshot](./screenshot.png)
 
