@@ -59,7 +59,7 @@ start another JVM to run code in envinroment of the project.
 `lein trampoline` could be used to stop the lein JVM after the project JVM has
 started.
 
-|   | Number of JVM's |
+|   | Number of JVMs |
 |---| --------------- |
 | Plain      | 7 |
 | Trampoline | 4 |
