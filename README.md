@@ -2,8 +2,8 @@
 
 Combine several lein auto tasks for leaner workflow.
 
-*NOTE: Very early version, not usable*
-*NOTE: Might be over-engineered*
+*NOTE: Very early version, not usable.
+Might be over-engineered.*
 
 ```
 “Daydreaming is the first awakening of what we call simulflow. It is
@@ -81,13 +81,15 @@ plugins check [this](./doc/notes.md).
   - Cljsbuild requires that Cljx has written the cljs sources
 - Tasks run in parallel where possible
   - Eg. cljx and less
-- Prepend output from tasks with the task name (by capturing \*out\*)
+- Prepend output from tasks with the task name (by capturing `*out*`)
 - Runs all tasks in one project JVM
   - Saves memory in comparison to running e.g. lein cljx and lein cljsbuild seperately
 
 ## TODO
 
 - [ ] Test how well the `java.nio.file.WatchService` works for OS X
+- [ ] Filter file events based on regex (or fn)
+  - E.g. to filter out Vim temp files
 
 ## NOTES
 
