@@ -36,15 +36,4 @@
                    :output-path "target/generated/clj"}
                   {:rules :cljs
                    :source-paths ["src/cljx"]
-                   :output-path "target/generated/cljs"}]}
-
-  :simulflow {:flows {:cljx  {:watch "src/cljx"
-                              ; :flow ["cljx" "once"] ; would be very slow, instead use :cljx implementation from simulflow.wrappers
-                              :flow :cljx}
-                      :cljs  {:watch ["src/cljs" "target/generated/cljs"]
-                              :deps [:cljx]
-                              ; :flow ["cljsbuild" "once"]
-                              :flow :cljs}
-                      :less  {:watch "src/less"
-                              ; :flow ["less" "once"]
-                              :flow :less}}})
+                   :output-path "target/generated/cljs"}]})

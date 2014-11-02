@@ -10,11 +10,14 @@
   :dependencies [[juxt/dirwatch "0.2.0"]
                  [org.clojure/clojure "1.6.0"]
                  [org.clojure/core.async "0.1.298.0-2a82a1-alpha"]
-                 [org.tobereplaced/nio.file "0.3.0"]
                  [prismatic/plumbing "0.3.3"]
+                 [prismatic/schema "0.3.1"]
                  [output-to-chan "0.1.0-SNAPSHOT"]
 
-                 ;; FIXME:
-                 [com.keminglabs/cljx "0.4.0"]]
+                 ;; Wrappers
+                 [com.keminglabs/cljx "0.4.0"]
+                 [thheller/shadow-build "0.9.5"]]
+  ; Cljx 0.4.0
+  :pedantic? false
   :profiles {:dev {:dependencies [[midje "1.6.3"]]
                    :plugins [[lein-midje "3.1.1"]]}})

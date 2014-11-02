@@ -1,149 +1,72 @@
 (ns simulflow.core-test
-  (:require [clojure.core.async :as async :refer [go <! <!! put! >!! timeout chan alts!! close!]]
+  (:require [midje.sweet :refer :all]
+            [clojure.core.async
+             :as async
+             :refer [go <! put!] :as a]
             [clojure.java.io :refer [file]]
-            [midje.sweet :refer :all]
-            [org.tobereplaced.nio.file :as nio]
-            [plumbing.core :refer [fnk]]
             [simulflow.async-test-utils :refer :all]
-            [simulflow.config :refer :all]
             [simulflow.core :refer :all]))
 
-(def sample-conf {:flows {:cljx  {:watch "src/cljx"
-                                  :flow ["cljx" "once"]}
-                          :cljs  {:watch ["src/cljs" "target/generated/cljs"]
-                                  :deps [:cljx]
-                                  :flow ["cljsbuild" "once"]}}})
-
-#_(facts "queue"
-  (fact queue
-    (let [<events (chan)
-          main (main-loop identity sample-conf <events)]
-      (close! <events)
-      (-> (chan->vec main) last first) => :exit))
-
-  (fact advanced-queue
-    (let [<events (chan)
-          main (main-loop identity sample-conf <events)]
-      (go
-        (<! (timeout 50))
-        (put! <events :cljs)
-        (put! <events :cljx)
-        (<! (timeout 50))
-        (put! <events :cljx)
-        (<! (timeout 50))
-        (close! <events))
-      (-> (chan->vec main) last first) => :exit)))
+(facts wrap-into
+  (let [wrap-into #'simulflow.core/wrap-into]
+    (wrap-into [] "foo")      => ["foo"]
+    (wrap-into [] ["a" "b"])  => ["a" "b"]
+    (wrap-into #{} "a")       => #{"a"}
+    (wrap-into #{} ["a" "b"]) => #{"a" "b"}))
 
 ; From juxt.dirwatch
 (defn temp-directory []
   (doto (file (System/getProperty "java.io.tmpdir") (str (gensym "dirwatch")))
-     (.mkdirs)))
+    (.mkdirs)))
 
 (defn temp-file [parent dir name]
   (let [dir (file parent dir)]
     (.mkdirs dir)
     [dir (file dir name)]))
 
-(let [dir (temp-directory)
-      options (coerce-config! (str dir) sample-conf)
-      [sub-dir f] (temp-file dir "target/generated/cljs" "foo.cljs")
-      path (nio/path f)]
-
-  (facts path->task
-    (path->tasks path (:flows options)) => #{:cljs})
-
-  (facts get-watch-dirs
-    (map (comp str (partial nio/relativize dir))
-         (get-watch-dirs options))
-    => (contains ["target/generated/cljs"
-                  "src/cljs"
-                  "src/cljx"]
-                 :in-any-order))
-
-  (facts "watch dir"
-    (let [[<events <stop] (watch [dir])]
-      (go
-        (spit f "foo")
-        (<! (timeout 50))
-        (spit f "foo")
-        (<! (timeout 100))
-        (close! <stop))
-      (chan->vec <events) => (repeat 3 path))))
-
-(facts select-tasks
-  (fact "Both modified"
-    (select-tasks {:cljx {:last-modified 2
-                          :last 1
-                          :active? false}
-                   :cljs {:last-modified 2
-                          :last 1
-                          :active? false
-                          :deps #{:cljx}}}) => [:cljx])
-
-  (fact "First run"
-    (select-tasks {:cljx {:last-modified nil
-                          :last nil}
-                   :cljs {:last-modified nil
-                          :last nil
-                          :deps #{:cljx}}}) => [:cljx])
-
-  (fact "Only other is modified"
-    (select-tasks {:cljx {:last-modified 2
-                          :last 2}
-                   :cljs {:last-modified 2
-                          :last 1
-                          :deps #{:cljx}}}) => [:cljs])
-
-  (fact "One is active"
-    (select-tasks {:cljx {:last-modified 3
-                          :last 2
-                          :active? true}
-                   :cljs {:last-modified 2
-                          :last 1
-                          :deps #{:cljx}}}) => nil))
-
-(facts "e2e"
-  (let [root (temp-directory)
-        [cljx cljx-src] (temp-file root "src/cljx" "foo.cljx")
-        [cljs cljs-src] (temp-file root "src/cljs" "bar.cljs")
-
-        [cljx-clj cljx-clj-src]   (temp-file root "target/generated/clj" "foo.clj")
-        [cljx-cljs cljx-cljs-src] (temp-file root "target/generated/cljs" "foo.cljs")
-        [cljs-js cljs-js-src]     (temp-file root "resources/public/js" "foo.js")
-
-        cljx-mock
-        (let [i (atom 0)]
-          (fn []
-            (go
-              (swap! i inc)
-              (spit cljx-clj-src (str "clj" @i))
-              (<! (timeout 20))
-              (spit cljx-cljs-src (str "cljs" @i))
-              (<! (timeout 20)))))
-
-        cljs-mock
-        (let [i (atom 0)]
-          (fn []
-            (go
-              (<! (timeout 40))
-              (spit cljs-js-src (str "js" (swap! i inc))))))
-
-        e2e-conf
-        {:flows {:cljx  {:watch "src/cljx"
-                         :flow cljx-mock}
-                 :cljs  {:watch ["src/cljs" "target/generated/cljs"]
-                         :deps [:cljx]
-                         :flow cljs-mock}}}
-
-        [main <stop] (start {:root (str root)
-                             :simulflow e2e-conf})]
+(def test-task
+  ^{:task 'test-task}
+  (fn []
     (go
-      (<! (timeout 220))
-      (spit cljs-src "foo")
-      (<! (timeout 220))
-      (spit cljx-src "foo")
-      (<! (timeout 2000))
-      (close! <stop))
-    (chan->vec main 2500) => []
-    (slurp cljs-js-src) => "js3"
-    (slurp cljx-cljs-src) => "cljs2"))
+      (<! (a/timeout 50)))))
+
+(def test-task2
+  ^{:task 'test-task2
+    :deps ['test-task]}
+  (fn []
+    (go
+      (<! (a/timeout 50)))))
+
+(facts run
+  (let [<results (chan->vec (run test-task))]
+    (count <results) => 1
+    (first <results)
+    => (just {:task 'test-task
+              :duration (roughly 50 10)})))
+
+(def watch-dirs #'simulflow.core/watch-dirs)
+
+(facts watch-dir
+  (let [d (temp-directory)
+        [d1 f1] (temp-file d "foo/bar" "core.cljs")
+        [<events <stop] (watch-dirs [d] {})]
+    (go
+      (spit f1 "1")
+      (<! (a/timeout 100))
+      (a/close! <stop))
+    (chan->vec <events) => []
+    ))
+
+(def watch* #'simulflow.core/watch*)
+
+(facts watch*
+  (let [<events (a/chan)
+        <results (watch* <events {} [test-task])]
+    (go
+      (put! <events true)
+      (<! (a/timeout 250))
+      (a/close! <events))
+
+    (chan->vec <results)
+    => (just [(just {:duration (roughly 50 10)
+                     :task 'test-task})])))
