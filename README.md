@@ -1,4 +1,6 @@
-# lein-simulflow [![Travis CI status](https://secure.travis-ci.org/metosin/lein-simulflow.png)](http://travis-ci.org/#!/metosin/lein-simulflow/builds)
+# lein-simulflow
+
+I suggest to check [boot](http://boot-clj.com/) instead.
 
 Combine several long running ~~lein~~ tasks for leaner workflow.
 
